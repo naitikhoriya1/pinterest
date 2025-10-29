@@ -67,7 +67,11 @@ const heroData: HeroData = {
 const topics = Object.keys(heroData);
 
 // --- Child Component: HeroImage ---
-const HeroImage: React.FC<{ image: ImageData }> = ({ image }) => {
+const HeroImage: React.FC<{
+  image: ImageData;
+  index: number;
+  total: number;
+}> = ({ image, index, total }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
@@ -80,8 +84,35 @@ const HeroImage: React.FC<{ image: ImageData }> = ({ image }) => {
     setHasError(true);
   };
 
+  interface SizeClassConfig {
+    index: number;
+    total: number;
+  }
+
+  const getSizeClasses = ({ index, total }: SizeClassConfig): number => {
+    const middleIndex = Math.floor(total / 2);
+
+    if (index === 0 || index === total - 1) return 1.75;
+    if (index === 1 || index === total - 2) return 1.5;
+    if (index === middleIndex) return 1;
+    return 1.25;
+  };
+
+  // Calculate vertical offset for curve effect
+  const getOffsetClass = () => {
+    const middleIndex = Math.floor(total / 2);
+    const offset = Math.abs(index - middleIndex);
+    const translateY = offset * 20; // 20px offset per position from center
+    return `transform -translate-y-[${translateY}px]`;
+  };
+
   return (
-    <div className="relative w-48 h-64">
+    <div
+      className={`relative ${getSizeClasses({
+        index,
+        total,
+      })} ${getOffsetClass()} transition-all duration-300 ease-in-out`}
+    >
       {isLoading && (
         <div className="absolute inset-0 bg-gray-200 animate-pulse rounded-2xl" />
       )}
@@ -150,8 +181,8 @@ const HeroSection: React.FC = () => {
   }, [currentTopic]);
 
   return (
-    <section className="w-full text-center py-20 bg-gradient-to-b from-white to-[#f8f8f8] overflow-hidden relative">
-      <h1 className="text-5xl md:text-6xl font-bold mb-4 text-gray-900">
+    <section className="w-full text-center py-7 bg-gradient-to-b from-white to-[#f8f8f8] overflow-hidden relative">
+      <h1 className="text-5xl md:text-6xl font-bold mb-2 text-gray-900">
         Get your next
       </h1>
 
@@ -164,10 +195,10 @@ const HeroSection: React.FC = () => {
 
       <div
         ref={imageContainerRef}
-        className="flex justify-center gap-4 mt-10 overflow-x-auto px-4 scrollbar-hide"
+        className="flex justify-center items-center gap-4 mt-10 overflow-x-auto px-4 scrollbar-hide min-h-[400px]"
       >
-        {heroData[currentTopic].map((img) => (
-          <HeroImage key={img.id} image={img} />
+        {heroData[currentTopic].map((img, idx, arr) => (
+          <HeroImage key={img.id} image={img} index={idx} total={arr.length} />
         ))}
       </div>
 

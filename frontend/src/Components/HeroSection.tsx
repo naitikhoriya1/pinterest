@@ -121,7 +121,7 @@ const HeroImage: React.FC<{
         alt={image.alt}
         onLoad={handleLoad}
         onError={handleError}
-        className={`w-full h-full object-cover rounded-2xl shadow-md hover:scale-105 transition-transform duration-300 ${
+        className={`w-full h-full object-cover rounded-2xl shadow-md hover:scale-110 transition-all duration-700 ease-out hover:shadow-xl ${
           isLoading ? "opacity-0" : "opacity-100"
         }`}
       />
@@ -141,7 +141,7 @@ const HeroSection: React.FC = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       setIndex((prev) => (prev + 1) % topics.length);
-    }, 4000);
+    }, 6000); // Increased from 4000 to 6000ms for more comfortable viewing
     return () => clearInterval(interval);
   }, []);
 
@@ -155,8 +155,14 @@ const HeroSection: React.FC = () => {
     if (textRef.current) {
       gsap.fromTo(
         textRef.current,
-        { y: 30, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.8, ease: "power3.out" }
+        { y: 40, opacity: 0 },
+        {
+          y: 0,
+          opacity: 1,
+          duration: 1.5,
+          ease: "circ.out(1, 0.8)", // Bouncy elastic effect
+          delay: 0.2, // Slight delay before text appears
+        }
       );
     }
 
@@ -166,15 +172,28 @@ const HeroSection: React.FC = () => {
       // GSAP will animate the `div.relative` elements.
       const imageWrappers =
         imageContainerRef.current.querySelectorAll(".relative");
+
+      // Clear any existing animations first
+      gsap.set(imageWrappers, { clearProps: "all" });
+
       gsap.fromTo(
         imageWrappers,
-        { y: 20, opacity: 0 },
+        {
+          y: 60,
+          opacity: 0,
+          scale: 0.8,
+        },
         {
           y: 0,
           opacity: 1,
-          duration: 0.7,
-          ease: "power2.out",
-          stagger: 0.1,
+          scale: 1,
+          duration: 1.8,
+          ease: "circ.out(1.4)", // Smooth overshoot effect
+          stagger: {
+            amount: 1, // Total stagger time for all images
+            from: "center", // Animate from center outwards
+            ease: "power2.inOut", // Smooth stagger timing
+          },
         }
       );
     }

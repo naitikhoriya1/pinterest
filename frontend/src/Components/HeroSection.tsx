@@ -159,7 +159,7 @@ const HeroSection: React.FC = () => {
         {
           y: 0,
           opacity: 1,
-          duration: 1.5,
+          duration: 1,
           ease: "circ.out(1, 0.8)", // Bouncy elastic effect
           delay: 0.2, // Slight delay before text appears
         }
@@ -187,7 +187,7 @@ const HeroSection: React.FC = () => {
           y: 0,
           opacity: 1,
           scale: 1,
-          duration: 1.8,
+          duration: 1.2,
           ease: "circ.out(1.4)", // Smooth overshoot effect
           stagger: {
             amount: 1, // Total stagger time for all images

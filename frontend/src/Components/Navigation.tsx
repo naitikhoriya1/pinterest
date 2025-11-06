@@ -6,6 +6,7 @@ import {
   SignedOut,
 } from "@clerk/clerk-react";
 import { FaPinterest } from "react-icons/fa";
+import { NavLink } from "react-router-dom";
 
 const Navigation = () => {
   return (
@@ -21,36 +22,70 @@ const Navigation = () => {
 
           {/* Middle section */}
           <div className="flex-1 flex items-center justify-center space-x-6 max-w-4xl">
-            <a
-              href="/"
-              className="text-black hover:bg-black/5 px-4 py-2 rounded-full font-semibold"
+            <NavLink
+              to="/"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-full font-semibold transition ${
+                  isActive
+                    ? "transition: all 0.25s ease-in-out bg-black/5 text-black"
+                    : "transition: all 0.25s ease-in-out text-[#111111] hover:bg-black/5"
+                }`
+              }
             >
               Explore
-            </a>
-            <a
-              href="/about"
-              className="text-[#111111] hover:bg-black/5 px-4 py-2 rounded-full"
+            </NavLink>
+
+            <NavLink
+              to="/about"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-full transition ${
+                  isActive
+                    ? "bg-black/5 text-black font-semibold"
+                    : "text-[#111111] hover:bg-black/5"
+                }`
+              }
             >
               About
-            </a>
-            <a
-              href="/business"
-              className="text-[#111111] hover:bg-black/5 px-4 py-2 rounded-full"
+            </NavLink>
+
+            <NavLink
+              to="/business"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-full transition ${
+                  isActive
+                    ? "bg-black/5 text-black font-semibold"
+                    : "text-[#111111] hover:bg-black/5"
+                }`
+              }
             >
               Businesses
-            </a>
-            <a
-              href="/create"
-              className="text-[#111111] hover:bg-black/5 px-4 py-2 rounded-full"
+            </NavLink>
+
+            <NavLink
+              to="/create"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-full transition ${
+                  isActive
+                    ? "bg-black/5 text-black font-semibold"
+                    : "text-[#111111] hover:bg-black/5"
+                }`
+              }
             >
               Create
-            </a>
-            <a
-              href="/news"
-              className="text-[#111111] hover:bg-black/5 px-4 py-2 rounded-full"
+            </NavLink>
+
+            <NavLink
+              to="/news"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-full transition ${
+                  isActive
+                    ? "bg-black/5 text-black font-semibold"
+                    : "text-[#111111] hover:bg-black/5"
+                }`
+              }
             >
               News
-            </a>
+            </NavLink>
           </div>
 
           {/* Right section */}

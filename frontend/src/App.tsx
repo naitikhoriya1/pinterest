@@ -7,6 +7,10 @@ import ErrorBoundary from "./Components/ErrorBoundary";
 // Lazy load pages
 const Home = lazy(() => import("./Pages/Home"));
 const Dashboard = lazy(() => import("./Pages/Dashboard"));
+const About = lazy(() => import("./Pages/About"));
+const Businesses = lazy(() => import("./Pages/Businesses"));
+const Create = lazy(() => import("./Pages/Create"));
+const News = lazy(() => import("./Pages/News"));
 
 // Loading component
 const LoadingSpinner = () => (
@@ -39,6 +43,10 @@ const App = () => {
                 </SignedIn>
               }
             />
+            <Route path="/about" element={<About />} />
+            <Route path="/businesses" element={<Businesses />} />
+            <Route path="/create" element={<Create />} />
+            <Route path="/news" element={<News />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>

@@ -49,7 +49,7 @@ const Navigation = () => {
             </NavLink>
 
             <NavLink
-              to="/business"
+              to="/businesses"
               className={({ isActive }) =>
                 `px-4 py-2 rounded-full transition ${
                   isActive

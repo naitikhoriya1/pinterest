@@ -86,22 +86,38 @@ const Footer: React.FC = () => {
         <div className="border-b border-gray-200">
           <button
             onClick={() => setIsFootnotesOpen(!isFootnotesOpen)}
-            className="flex justify-between items-center w-full py-6"
+            className="flex justify-between items-center w-full py-8 text-left"
             aria-expanded={isFootnotesOpen}
           >
-            <span className="text-sm font-semibold">Footnotes</span>
+            <span className="text-sm font-semibold text-gray-900">
+              Footnotes
+            </span>
             {isFootnotesOpen ? <MinusIcon /> : <PlusIcon />}
           </button>
 
           {/* Collapsible content */}
           <div
             className={`overflow-hidden transition-all duration-300 ease-in-out
-              ${isFootnotesOpen ? "max-h-96 pb-6" : "max-h-0"}
-            `}
+      ${isFootnotesOpen ? "max-h-[300px] py-10" : "max-h-0"}
+    `}
           >
-            <p className="text-gray-700 max-w-2xl">
-              This is where the footnote content would appear.
-            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 text-sm text-gray-700">
+              {/* Footnote 1 */}
+              <div className="flex gap-3">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full border border-gray-400 text-xs font-semibold">
+                  1
+                </span>
+                <p>Pinterest, global analysis, Q1 2025</p>
+              </div>
+
+              {/* Footnote 2 */}
+              <div className="flex gap-3">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full border border-gray-400 text-xs font-semibold">
+                  2
+                </span>
+                <p>Pinterest internal data, global, June 2023</p>
+              </div>
+            </div>
           </div>
         </div>
 

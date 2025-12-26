@@ -3,6 +3,8 @@ import gsap from "gsap";
 import BusinessTabs from "../Components/createBusinessTabs";
 import AudienceCards from "../Components/createAudienceCards";
 import SuccessStories from "../Components/createSuccessstories";
+import WhyPinterest from "../Components/createWhyPinterest";
+import AboutNavbar from "../Components/AboutNavbar";
 
 /* ✅ Use direct image URLs (CDN-safe) */
 export const leftImages: string[] = [
@@ -139,6 +141,8 @@ const Create = () => {
         </div>
       </section>
       <SuccessStories />
+      <WhyPinterest />
+      <AboutNavbar />
     </>
   );
 };

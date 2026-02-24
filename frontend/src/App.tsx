@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { SignedIn, useUser } from "@clerk/clerk-react";
 import { Suspense, lazy } from "react";
 import MainLayout from "./layouts/MainLayout";
+import DashboardLayout from "./layouts/DashboardLayout";
 import ErrorBoundary from "./Components/ErrorBoundary";
 
 // Lazy load pages
@@ -26,31 +27,44 @@ const App = () => {
 
   return (
     <ErrorBoundary>
-      <MainLayout>
-        <Suspense fallback={<LoadingSpinner />}>
-          <Routes>
-            <Route
-              path="/"
-              element={
-                isSignedIn ? <Navigate to="/dashboard" replace /> : <Home />
-              }
-            />
-            <Route
-              path="/dashboard"
-              element={
-                <SignedIn>
+      <Suspense fallback={<LoadingSpinner />}>
+        <Routes>
+          <Route
+            path="/dashboard"
+            element={
+              <SignedIn>
+                <DashboardLayout>
                   <Dashboard />
-                </SignedIn>
-              }
-            />
-            <Route path="/about" element={<About />} />
-            <Route path="/businesses" element={<Businesses />} />
-            <Route path="/create" element={<Create />} />
-            <Route path="/news" element={<News />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-      </MainLayout>
+                </DashboardLayout>
+              </SignedIn>
+            }
+          />
+          <Route
+            path="/*"
+            element={
+              <MainLayout>
+                <Routes>
+                  <Route
+                    path="/"
+                    element={
+                      isSignedIn ? (
+                        <Navigate to="/dashboard" replace />
+                      ) : (
+                        <Home />
+                      )
+                    }
+                  />
+                  <Route path="/about" element={<About />} />
+                  <Route path="/businesses" element={<Businesses />} />
+                  <Route path="/create" element={<Create />} />
+                  <Route path="/news" element={<News />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </MainLayout>
+            }
+          />
+        </Routes>
+      </Suspense>
     </ErrorBoundary>
   );
 };

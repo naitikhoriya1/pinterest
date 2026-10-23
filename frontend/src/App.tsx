@@ -12,6 +12,7 @@ const About = lazy(() => import("./Pages/About"));
 const Businesses = lazy(() => import("./Pages/Businesses"));
 const Create = lazy(() => import("./Pages/Create"));
 const News = lazy(() => import("./Pages/News"));
+const SSOCallback = lazy(() => import("./Pages/SSOCallback"));
 
 // Loading component
 const LoadingSpinner = () => (
@@ -29,6 +30,9 @@ const App = () => {
     <ErrorBoundary>
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
+          {/* Clerk OAuth SSO callback — must be outside MainLayout */}
+          <Route path="/sso-callback" element={<SSOCallback />} />
+
           <Route
             path="/dashboard"
             element={

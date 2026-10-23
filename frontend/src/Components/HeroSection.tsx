@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
+import { SignedOut } from "@clerk/clerk-react";
+import GoogleAuthButton from "./GoogleAuthButton";
 
 // --- Interfaces ---
 interface ImageData {
@@ -224,6 +226,20 @@ const HeroSection: React.FC = () => {
       <button className="mt-10 bg-green-700 text-white py-2 px-6 rounded-full hover:bg-green-800 transition duration-300">
         Here's how it works ↓
       </button>
+
+      {/* Google Sign-up CTA */}
+      <SignedOut>
+        <div className="flex flex-col items-center mt-6 gap-3">
+          <GoogleAuthButton
+            mode="sign-up"
+            size="lg"
+            variant="white"
+            label="Continue with Google — it's free"
+            className="shadow-md"
+          />
+          <p className="text-xs text-gray-400">No credit card required</p>
+        </div>
+      </SignedOut>
 
       <div className="flex justify-center mt-6 space-x-2">
         {topics.map((_, i) => (

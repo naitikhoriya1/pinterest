@@ -1,4 +1,6 @@
 import React from "react";
+import { SignedOut } from "@clerk/clerk-react";
+import GoogleAuthButton from "./GoogleAuthButton";
 
 const FeaturesSection: React.FC = () => {
   return (
@@ -36,9 +38,14 @@ const FeaturesSection: React.FC = () => {
             <p className="text-gray-600 text-lg mb-6 max-w-md">
               Search with skin tone ranges for beauty ideas that represent you.
             </p>
-            <button className="bg-red-600 hover:bg-red-700 transition-colors text-white font-medium px-6 py-3 rounded-full">
-              Join Pinterest
-            </button>
+            <SignedOut>
+              <GoogleAuthButton
+                mode="sign-up"
+                size="md"
+                variant="red"
+                label="Join Pinterest"
+              />
+            </SignedOut>
           </div>
         </div>
 
@@ -53,9 +60,14 @@ const FeaturesSection: React.FC = () => {
               Search for objects within an image to find more styles you’ll
               love.
             </p>
-            <button className="bg-red-600 hover:bg-red-700 transition-colors text-white font-medium px-6 py-3 rounded-full">
-              Join Pinterest
-            </button>
+            <SignedOut>
+              <GoogleAuthButton
+                mode="sign-up"
+                size="md"
+                variant="red"
+                label="Join Pinterest"
+              />
+            </SignedOut>
           </div>
 
           {/* Image Right */}
@@ -90,9 +102,14 @@ const FeaturesSection: React.FC = () => {
             <p className="text-gray-600 text-lg mb-6 max-w-md">
               Visualise your ideas with others using a Pinterest account
             </p>
-            <button className="bg-red-600 hover:bg-red-700 transition-colors text-white font-medium px-6 py-3 rounded-full">
-              Join Pinterest
-            </button>
+            <SignedOut>
+              <GoogleAuthButton
+                mode="sign-up"
+                size="md"
+                variant="red"
+                label="Join Pinterest"
+              />
+            </SignedOut>
           </div>
         </div>
       </div>

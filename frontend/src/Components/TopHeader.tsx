@@ -1,9 +1,13 @@
-import { ChevronDown, Search } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import { UserButton } from "@clerk/clerk-react";
 
 const TopHeader = () => {
+  const handleOpenCreate = () => {
+    window.dispatchEvent(new CustomEvent("open-create-pin-modal"));
+  };
+
   return (
-    <div className="sticky top-0 z-50 bg-[#f1f1f1] px-8 py-4 flex items-center justify-between">
+    <div className="sticky top-0 z-40 bg-[#f1f1f1] px-8 py-4 flex items-center justify-between">
       {/* Search Bar */}
       <div className="flex-1 mr-6 ml-2">
         <div className="flex items-center bg-[#e9e9e9] rounded-full px-5 py-3 hover:bg-[#e2e2e2] transition">

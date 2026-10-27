@@ -9,6 +9,7 @@ export interface IPin extends Document {
   height: number;
   tags: string[];
   saveCount: number;
+  cloudinaryId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,17 +24,16 @@ const pinSchema = new Schema<IPin>(
     height: { type: Number, required: true },
     tags: [{ type: String, lowercase: true, trim: true }],
     saveCount: { type: Number, default: 0 },
+    cloudinaryId: { type: String, default: "" },
   },
   { timestamps: true }
 );
 
-// Index for feed scoring (cursor-based pagination on createdAt)
-pinSchema.index({ createdAt: -1 });
+// Feed: cursor-based pagination over ALL pins (createdAt + _id tiebreaker)
+pinSchema.index({ createdAt: -1, _id: -1 });
 
-// Index for tag-based filtering
+// Tag-based filtering (dormant for now, useful for a future "For you" feed)
 pinSchema.index({ tags: 1 });
-
-// Compound index for efficient feed queries
 pinSchema.index({ tags: 1, createdAt: -1 });
 
 // Text index for search

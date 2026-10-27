@@ -16,24 +16,31 @@ interface UseClerkSyncResult {
   status: SyncStatus;
   apiUser: ApiUser | null;
   hasInterests: boolean;
+  isSynced: boolean;
 }
 
 /**
  * Called once the Clerk session is active.
  * 1. Exchanges Clerk identity for a backend JWT via POST /api/auth/clerk-sync.
- * 2. Stores the token in localStorage.
- * 3. Checks whether the user has completed interest onboarding.
+ * 2. Stores the token in localStorage and sets isSynced = true.
+ * 3. Checks whether the user has completed interest onboarding (dormant).
  */
 export function useClerkSync(): UseClerkSyncResult {
   const { user, isSignedIn, isLoaded } = useUser();
   const [status, setStatus] = useState<SyncStatus>("idle");
   const [apiUser, setApiUser] = useState<ApiUser | null>(null);
+  const [isSynced, setIsSynced] = useState<boolean>(() => Boolean(getToken()));
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || !user) return;
+    if (!isLoaded || !isSignedIn || !user) {
+      setIsSynced(false);
+      return;
+    }
 
-    // If we already have a token stored, still fetch /me to get fresh user data
     const existingToken = getToken();
+    if (existingToken) {
+      setIsSynced(true);
+    }
 
     const sync = async () => {
       setStatus("syncing");
@@ -51,9 +58,10 @@ export function useClerkSync(): UseClerkSyncResult {
             }
           );
           setToken(syncRes.token);
+          setIsSynced(true);
         }
 
-        // Step 2 — fetch full user profile (includes interests map)
+        // Step 2 — fetch user profile
         const meRes = await api.get<{ success: boolean; data: ApiUser }>("/api/user/me");
         setApiUser(meRes.data);
         setStatus("done");
@@ -70,5 +78,5 @@ export function useClerkSync(): UseClerkSyncResult {
   const hasInterests =
     apiUser !== null && Object.keys(apiUser.interests ?? {}).length > 0;
 
-  return { status, apiUser, hasInterests };
+  return { status, apiUser, hasInterests, isSynced };
 }

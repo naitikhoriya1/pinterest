@@ -9,13 +9,19 @@ connectDB();
 
 const app = express();
 
-// middleware
-app.use(cors());
+// ── Middleware ──────────────────────────────────────────────────────────────
+app.use(cors({ origin: "*", credentials: true }));
 app.use(helmet());
 app.use(express.json());
+
+// ── Routes ──────────────────────────────────────────────────────────────────
 import authRoutes from "./modules/auth/auth.routes";
-// routes
+import pinRoutes from "./modules/pin/pin.routes";
+import userRoutes from "./modules/user/user.routes";
+
 app.use("/api/auth", authRoutes);
+app.use("/api/pins", pinRoutes);
+app.use("/api/user", userRoutes);
 
 app.get("/", (_, res) => res.send("Pinterest Backend API Running..."));
 

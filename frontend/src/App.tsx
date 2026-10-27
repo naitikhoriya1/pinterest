@@ -4,10 +4,12 @@ import { Suspense, lazy } from "react";
 import MainLayout from "./layouts/MainLayout";
 import DashboardLayout from "./layouts/DashboardLayout";
 import ErrorBoundary from "./Components/ErrorBoundary";
+import { useClerkSync } from "./hooks/useClerkSync";
 
 // Lazy load pages
 const Home = lazy(() => import("./Pages/Home"));
 const Dashboard = lazy(() => import("./Pages/Dashboard"));
+const Onboarding = lazy(() => import("./Pages/Onboarding"));
 const About = lazy(() => import("./Pages/About"));
 const Businesses = lazy(() => import("./Pages/Businesses"));
 const Create = lazy(() => import("./Pages/Create"));
@@ -24,15 +26,32 @@ const LoadingSpinner = () => (
 const App = () => {
   const { isSignedIn, isLoaded } = useUser();
 
+  // Sync Clerk identity → backend JWT + fetch user profile
+  const { status: syncStatus, hasInterests } = useClerkSync();
+
   if (!isLoaded) return <LoadingSpinner />;
+
+  // Show spinner while we're exchanging tokens (only when signed in)
+  if (isSignedIn && syncStatus === "syncing") return <LoadingSpinner />;
 
   return (
     <ErrorBoundary>
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
-          {/* Clerk OAuth SSO callback — must be outside MainLayout */}
+          {/* Clerk OAuth SSO callback — must be outside all layouts */}
           <Route path="/sso-callback" element={<SSOCallback />} />
 
+          {/* Onboarding — shown once after first sign-in (no layout wrapper) */}
+          <Route
+            path="/onboarding"
+            element={
+              <SignedIn>
+                <Onboarding />
+              </SignedIn>
+            }
+          />
+
+          {/* Protected dashboard area */}
           <Route
             path="/dashboard"
             element={
@@ -43,6 +62,8 @@ const App = () => {
               </SignedIn>
             }
           />
+
+          {/* Public / marketing pages */}
           <Route
             path="/*"
             element={
@@ -52,7 +73,12 @@ const App = () => {
                     path="/"
                     element={
                       isSignedIn ? (
-                        <Navigate to="/dashboard" replace />
+                        // Redirect after login: onboard first-timers, else go to dashboard
+                        syncStatus === "done" && !hasInterests ? (
+                          <Navigate to="/onboarding" replace />
+                        ) : (
+                          <Navigate to="/dashboard" replace />
+                        )
                       ) : (
                         <Home />
                       )

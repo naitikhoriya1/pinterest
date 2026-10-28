@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { X, Heart, Edit3, Trash2, ExternalLink, Loader2, User } from "lucide-react";
 import { api } from "../lib/api";
 import type { Pin, PinOwner } from "../types/pin";
@@ -24,6 +24,26 @@ const PinDetailModal: React.FC<PinDetailModalProps> = ({
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (isOpen && pin) {
+      const ownerId =
+        typeof pin.owner === "string"
+          ? pin.owner
+          : (pin.owner as PinOwner)?._id;
+      const isOwner = Boolean(currentUserId && ownerId && currentUserId === ownerId);
+
+      console.log("[PinDetailModal] Opened for pin:", {
+        pinId: pin._id,
+        title: pin.title,
+        ownerId,
+        currentUserId,
+        isOwner,
+        imageUrl: pin.imageUrl,
+        cloudinaryId: pin.cloudinaryId,
+      });
+    }
+  }, [isOpen, pin, currentUserId]);
+
   if (!isOpen || !pin) return null;
 
   // Check ownership
@@ -39,13 +59,19 @@ const PinDetailModal: React.FC<PinDetailModalProps> = ({
   const ownerAvatar = ownerObj?.avatarUrl;
 
   const handleDelete = async () => {
+    console.log("[PinDetailModal] Initiating pin deletion for pinId:", pin._id);
     setIsDeleting(true);
     setError(null);
     try {
       await api.delete(`/api/pins/${pin._id}`);
+      console.log("[PinDetailModal] Successfully deleted pin from backend & Cloudinary:", pin._id);
       onDelete(pin._id);
       onClose();
     } catch (err: any) {
+      console.error("[PinDetailModal] ❌ Failed to delete pin:", {
+        pinId: pin._id,
+        error: err?.message || err,
+      });
       setError(err?.message || "Failed to delete pin");
       setIsDeleting(false);
     }
@@ -68,6 +94,12 @@ const PinDetailModal: React.FC<PinDetailModalProps> = ({
           <img
             src={pin.imageUrl}
             alt={pin.title}
+            onError={() => {
+              console.error("[PinDetailModal] ❌ Full image failed to load in modal:", {
+                pinId: pin._id,
+                imageUrl: pin.imageUrl,
+              });
+            }}
             className="w-full h-full object-contain max-h-[85vh]"
           />
         </div>
@@ -96,7 +128,10 @@ const PinDetailModal: React.FC<PinDetailModalProps> = ({
                 {isOwner && (
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => onEdit(pin)}
+                      onClick={() => {
+                        console.log("[PinDetailModal] Edit icon clicked for pin:", pin._id);
+                        onEdit(pin);
+                      }}
                       title="Edit pin"
                       className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition"
                     >
@@ -187,6 +222,7 @@ const PinDetailModal: React.FC<PinDetailModalProps> = ({
                 <img
                   src={ownerAvatar}
                   alt={ownerName}
+                  onError={() => console.warn("[PinDetailModal] Owner avatar failed to load:", ownerAvatar)}
                   className="w-10 h-10 rounded-full object-cover border"
                 />
               ) : (

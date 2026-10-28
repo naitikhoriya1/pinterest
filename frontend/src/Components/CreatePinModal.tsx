@@ -1,5 +1,5 @@
 import React, { useState, useRef, ChangeEvent, DragEvent } from "react";
-import { X, Upload, Image as ImageIcon, Loader2, Tag } from "lucide-react";
+import { X, Upload, Loader2, Tag } from "lucide-react";
 import { api } from "../lib/api";
 import type { Pin } from "../types/pin";
 
@@ -31,13 +31,24 @@ const CreatePinModal: React.FC<CreatePinModalProps> = ({
   if (!isOpen) return null;
 
   const handleFileSelect = (selectedFile: File) => {
+    console.log("[CreatePinModal] File selected from device:", {
+      name: selectedFile.name,
+      sizeBytes: selectedFile.size,
+      sizeMB: (selectedFile.size / (1024 * 1024)).toFixed(2) + " MB",
+      type: selectedFile.type,
+      lastModified: new Date(selectedFile.lastModified).toISOString(),
+    });
+
     if (!selectedFile.type.startsWith("image/")) {
-      setError("Please select an image file (JPEG, PNG, WebP, GIF)");
+      const err = `Invalid file type (${selectedFile.type}). Please select an image file (JPEG, PNG, WebP, GIF)`;
+      console.warn("[CreatePinModal] ⚠️ " + err);
+      setError(err);
       return;
     }
     setError(null);
     setFile(selectedFile);
     const objectUrl = URL.createObjectURL(selectedFile);
+    console.log("[CreatePinModal] Created local object preview URL:", objectUrl);
     setPreviewUrl(objectUrl);
   };
 
@@ -61,6 +72,7 @@ const CreatePinModal: React.FC<CreatePinModalProps> = ({
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      console.log("[CreatePinModal] File dropped into dropzone");
       handleFileSelect(e.dataTransfer.files[0]);
     }
   };
@@ -68,6 +80,7 @@ const CreatePinModal: React.FC<CreatePinModalProps> = ({
   const handleAddTag = () => {
     const trimmed = tagInput.trim().toLowerCase();
     if (trimmed && !tags.includes(trimmed)) {
+      console.log("[CreatePinModal] Tag added:", trimmed);
       setTags([...tags, trimmed]);
       setTagInput("");
     }
@@ -81,6 +94,7 @@ const CreatePinModal: React.FC<CreatePinModalProps> = ({
   };
 
   const handleRemoveTag = (tagToRemove: string) => {
+    console.log("[CreatePinModal] Tag removed:", tagToRemove);
     setTags(tags.filter((t) => t !== tagToRemove));
   };
 
@@ -105,13 +119,26 @@ const CreatePinModal: React.FC<CreatePinModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("[CreatePinModal] Form submission triggered.", {
+      title,
+      description,
+      tags,
+      hasFile: Boolean(file),
+      imageUrlInput,
+      useUrlMode,
+    });
+
     if (!title.trim()) {
-      setError("Please provide a title for your pin");
+      const err = "Please provide a title for your pin";
+      console.warn("[CreatePinModal] Validation error: " + err);
+      setError(err);
       return;
     }
 
     if (!file && !imageUrlInput.trim()) {
-      setError("Please upload an image file from your machine or enter an image URL");
+      const err = "Please upload an image file from your machine or enter an image URL";
+      console.warn("[CreatePinModal] Validation error: " + err);
+      setError(err);
       return;
     }
 
@@ -123,22 +150,32 @@ const CreatePinModal: React.FC<CreatePinModalProps> = ({
 
       if (file) {
         // Upload local file from user's machine to backend -> Cloudinary
+        console.log("[CreatePinModal] Preparing FormData for multipart upload:", {
+          fileName: file.name,
+          title: title.trim(),
+          tagsCount: tags.length,
+        });
+
         const formData = new FormData();
         formData.append("image", file);
         formData.append("title", title.trim());
         formData.append("description", description.trim());
         formData.append("tags", JSON.stringify(tags));
 
+        console.log("[CreatePinModal] Uploading file to POST /api/pins (Cloudinary stream)...");
         const res = await api.upload<{ success: boolean; data: Pin }>("/api/pins", formData);
+        console.log("[CreatePinModal] ✅ Pin created successfully via file upload:", res.data);
         createdPin = res.data;
       } else {
         // Upload from remote image URL to Cloudinary
+        console.log("[CreatePinModal] Sending POST /api/pins with remote URL:", imageUrlInput.trim());
         const res = await api.post<{ success: boolean; data: Pin }>("/api/pins", {
           title: title.trim(),
           description: description.trim(),
           imageUrl: imageUrlInput.trim(),
           tags,
         });
+        console.log("[CreatePinModal] ✅ Pin created successfully via URL:", res.data);
         createdPin = res.data;
       }
 
@@ -146,7 +183,9 @@ const CreatePinModal: React.FC<CreatePinModalProps> = ({
       resetForm();
       onClose();
     } catch (err: any) {
-      console.error("Create pin error:", err);
+      console.error("[CreatePinModal] ❌ Failed to create pin / upload to Cloudinary:", {
+        error: err?.message || err,
+      });
       setError(err?.message || "Failed to upload image to Cloudinary");
     } finally {
       setIsSubmitting(false);
@@ -211,7 +250,10 @@ const CreatePinModal: React.FC<CreatePinModalProps> = ({
                         src={previewUrl}
                         alt="Preview"
                         className="w-full h-full object-cover"
-                        onError={() => setError("Could not load image preview from that URL")}
+                        onError={() => {
+                          console.warn("[CreatePinModal] Image URL preview failed to load:", previewUrl);
+                          setError("Could not load image preview from that URL");
+                        }}
                       />
                     </div>
                   )}

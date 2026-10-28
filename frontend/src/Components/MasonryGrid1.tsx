@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import Masonry from "react-masonry-css";
 import type { Pin } from "../types/pin";
 
@@ -15,6 +15,10 @@ interface MasonryGrid1Props {
 }
 
 const MasonryGrid1: React.FC<MasonryGrid1Props> = ({ pins, onPinClick }) => {
+  useEffect(() => {
+    console.log(`[MasonryGrid1] Rendering grid with ${pins.length} pins.`);
+  }, [pins.length]);
+
   return (
     <Masonry
       breakpointCols={breakpointColumnsObj}
@@ -24,7 +28,15 @@ const MasonryGrid1: React.FC<MasonryGrid1Props> = ({ pins, onPinClick }) => {
       {pins.map((pin) => (
         <div
           key={pin._id}
-          onClick={() => onPinClick?.(pin)}
+          onClick={() => {
+            console.log("[MasonryGrid1] Pin clicked:", {
+              id: pin._id,
+              title: pin.title,
+              imageUrl: pin.imageUrl,
+              tags: pin.tags,
+            });
+            onPinClick?.(pin);
+          }}
           className="group relative rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer bg-gray-100"
         >
           {/* Pin image with width, height, loading="lazy", and w-full h-auto */}
@@ -34,6 +46,16 @@ const MasonryGrid1: React.FC<MasonryGrid1Props> = ({ pins, onPinClick }) => {
             width={pin.width}
             height={pin.height}
             loading="lazy"
+            onLoad={() => {
+              // optional debug if needed
+            }}
+            onError={() => {
+              console.error("[MasonryGrid1] ❌ Pin image failed to load:", {
+                pinId: pin._id,
+                title: pin.title,
+                failedUrl: pin.imageUrl,
+              });
+            }}
             className="w-full h-auto object-cover rounded-2xl block"
           />
 

@@ -6,6 +6,28 @@ import cloudinary from "../../config/cloudinary";
 import { uploadToCloudinary } from "../../middleware/upload.middleware";
 
 /**
+ * Shared helper to validate and parse cursor `<ISO createdAt>_<ObjectId>`.
+ * Returns { date, objectId } if valid, or null if malformed.
+ */
+const parseCursor = (
+  cursor: unknown
+): { date: Date; objectId: Types.ObjectId } | null => {
+  if (typeof cursor !== "string") return null;
+  const parts = cursor.split("_");
+  if (parts.length !== 2) return null;
+  const [dateStr, idStr] = parts;
+  const date = new Date(dateStr);
+  if (
+    isNaN(date.getTime()) ||
+    !Types.ObjectId.isValid(idStr) ||
+    !/^[0-9a-fA-F]{24}$/.test(idStr)
+  ) {
+    return null;
+  }
+  return { date, objectId: new Types.ObjectId(idStr) };
+};
+
+/**
  * GET /api/pins/feed?limit=<number>&cursor=<ISO_createdAt>_<ObjectId>
  *
  * Returns a global feed of all pins, newest first, using cursor-based pagination.
@@ -30,40 +52,17 @@ export const getFeed = async (req: AuthRequest, res: Response): Promise<void> =>
     let query: Record<string, unknown> = {};
 
     if (cursor) {
-      if (typeof cursor !== "string") {
-        console.warn("[pin.controller:getFeed] ⚠️ Invalid cursor type:", typeof cursor);
+      const parsed = parseCursor(cursor);
+      if (!parsed) {
+        console.warn("[pin.controller:getFeed] ⚠️ Invalid cursor:", cursor);
         res.status(400).json({ success: false, message: "Invalid cursor" });
         return;
       }
 
-      const parts = cursor.split("_");
-      if (parts.length !== 2) {
-        console.warn("[pin.controller:getFeed] ⚠️ Cursor parts !== 2:", cursor);
-        res.status(400).json({ success: false, message: "Invalid cursor" });
-        return;
-      }
-
-      const [dateStr, idStr] = parts;
-      const date = new Date(dateStr);
-
-      if (
-        isNaN(date.getTime()) ||
-        !Types.ObjectId.isValid(idStr) ||
-        !/^[0-9a-fA-F]{24}$/.test(idStr)
-      ) {
-        console.warn("[pin.controller:getFeed] ⚠️ Malformed date or ObjectId in cursor:", {
-          dateStr,
-          idStr,
-        });
-        res.status(400).json({ success: false, message: "Invalid cursor" });
-        return;
-      }
-
-      const objectId = new Types.ObjectId(idStr);
       query = {
         $or: [
-          { createdAt: { $lt: date } },
-          { createdAt: date, _id: { $lt: objectId } },
+          { createdAt: { $lt: parsed.date } },
+          { createdAt: parsed.date, _id: { $lt: parsed.objectId } },
         ],
       };
     }
@@ -91,6 +90,97 @@ export const getFeed = async (req: AuthRequest, res: Response): Promise<void> =>
     res.json({ success: true, data, nextCursor });
   } catch (err: any) {
     console.error("[pin.controller:getFeed] ❌ Server error:", err?.message || err);
+    res.status(500).json({ success: false, message: err.message || "Server error" });
+  }
+};
+
+/**
+ * GET /api/pins/search?q=<query>&limit=<number>&cursor=<ISO_createdAt>_<ObjectId>
+ *
+ * Searches pins by title with case-insensitive partial matching and cursor-based pagination.
+ * Query params:
+ *   - q: required search term (trimmed, max 100 chars)
+ *   - limit: default 20, max 50
+ *   - cursor: `<ISO createdAt>_<ObjectId>`
+ *
+ * Response: { success: true, data: Pin[], nextCursor: string | null, query: string }
+ */
+export const searchPins = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const rawQ = typeof req.query.q === "string" ? req.query.q : "";
+    let q = rawQ.trim();
+
+    if (!q) {
+      console.warn("[pin.controller:searchPins] ⚠️ Missing search query 'q'.");
+      res.status(400).json({ success: false, message: "Search query is required" });
+      return;
+    }
+
+    if (q.length > 100) {
+      q = q.slice(0, 100);
+    }
+
+    const rawLimit = parseInt(req.query.limit as string, 10);
+    const limit = !isNaN(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 50) : 20;
+    const cursor = req.query.cursor as string | undefined;
+
+    console.log("[pin.controller:searchPins] Request:", {
+      userId: req.userId,
+      query: q,
+      limit,
+      cursor: cursor || "(initial page)",
+    });
+
+    // Escape regex special characters to prevent regex injection or invalid syntax
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const titleFilter = { title: { $regex: escaped, $options: "i" } };
+
+    let query: Record<string, unknown> = titleFilter;
+
+    if (cursor) {
+      const parsed = parseCursor(cursor);
+      if (!parsed) {
+        console.warn("[pin.controller:searchPins] ⚠️ Invalid cursor:", cursor);
+        res.status(400).json({ success: false, message: "Invalid cursor" });
+        return;
+      }
+
+      const cursorFilter = {
+        $or: [
+          { createdAt: { $lt: parsed.date } },
+          { createdAt: parsed.date, _id: { $lt: parsed.objectId } },
+        ],
+      };
+
+      query = {
+        $and: [titleFilter, cursorFilter],
+      };
+    }
+
+    const pins = await Pin.find(query)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit + 1)
+      .populate("owner", "username email avatarUrl")
+      .lean();
+
+    const hasMore = pins.length > limit;
+    const data = hasMore ? pins.slice(0, limit) : pins;
+
+    const nextCursor =
+      hasMore && data.length > 0
+        ? `${new Date(data[data.length - 1].createdAt).toISOString()}_${data[data.length - 1]._id.toString()}`
+        : null;
+
+    console.log("[pin.controller:searchPins] ✅ Success:", {
+      query: q,
+      returnedCount: data.length,
+      hasMore,
+      nextCursor,
+    });
+
+    res.json({ success: true, data, nextCursor, query: q });
+  } catch (err: any) {
+    console.error("[pin.controller:searchPins] ❌ Server error:", err?.message || err);
     res.status(500).json({ success: false, message: err.message || "Server error" });
   }
 };

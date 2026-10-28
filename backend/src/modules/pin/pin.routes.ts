@@ -3,6 +3,7 @@ import { requireAuth } from "../../middleware/auth.middleware";
 import { upload } from "../../middleware/upload.middleware";
 import {
   getFeed,
+  searchPins,
   getMyPins,
   getPinById,
   createPin,
@@ -13,8 +14,9 @@ import {
 const router = Router();
 
 // ── GET routes ───────────────────────────────────────────────────────────────
-// Keep /feed and /user/me before /:id so Express doesn't match them as an ID param
+// Keep /feed, /search, and /user/me before /:id so Express doesn't match them as an ID param
 router.get("/feed", requireAuth, getFeed);
+router.get("/search", requireAuth, searchPins);
 router.get("/user/me", requireAuth, getMyPins);
 router.get("/:id", requireAuth, getPinById);
 

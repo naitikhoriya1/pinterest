@@ -9,6 +9,7 @@ import { useClerkSync } from "./hooks/useClerkSync";
 // Lazy load pages
 const Home = lazy(() => import("./Pages/Home"));
 const Dashboard = lazy(() => import("./Pages/Dashboard"));
+const SearchResults = lazy(() => import("./Pages/SearchResults"));
 const Onboarding = lazy(() => import("./Pages/Onboarding"));
 const About = lazy(() => import("./Pages/About"));
 const Businesses = lazy(() => import("./Pages/Businesses"));
@@ -51,6 +52,18 @@ const App = () => {
               <SignedIn>
                 <DashboardLayout>
                   <Dashboard />
+                </DashboardLayout>
+              </SignedIn>
+            }
+          />
+
+          {/* Protected search area */}
+          <Route
+            path="/search"
+            element={
+              <SignedIn>
+                <DashboardLayout>
+                  <SearchResults />
                 </DashboardLayout>
               </SignedIn>
             }

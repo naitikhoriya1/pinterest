@@ -91,12 +91,12 @@ const Navigation = () => {
           {/* Right section */}
           <div className="flex items-center space-x-2">
             <SignedOut>
-              <SignInButton mode="modal">
+              <SignInButton mode="modal" forceRedirectUrl="/dashboard">
                 <button className="text-white bg-[#e60023] hover:bg-[#d50c22] px-4 py-2 rounded-full font-semibold">
                   Log in
                 </button>
               </SignInButton>
-              <SignUpButton mode="modal">
+              <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
                 <button className="bg-[#efefef] hover:bg-[#e2e2e2] text-black px-4 py-2 rounded-full font-semibold">
                   Sign up
                 </button>

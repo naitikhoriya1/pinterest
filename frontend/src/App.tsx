@@ -9,6 +9,7 @@ import { useClerkSync } from "./hooks/useClerkSync";
 // Lazy load pages
 const Home = lazy(() => import("./Pages/Home"));
 const Dashboard = lazy(() => import("./Pages/Dashboard"));
+const SearchResults = lazy(() => import("./Pages/SearchResults"));
 const Onboarding = lazy(() => import("./Pages/Onboarding"));
 const About = lazy(() => import("./Pages/About"));
 const Businesses = lazy(() => import("./Pages/Businesses"));
@@ -26,8 +27,8 @@ const LoadingSpinner = () => (
 const App = () => {
   const { isSignedIn, isLoaded } = useUser();
 
-  // Sync Clerk identity → backend JWT + fetch user profile
-  const { status: syncStatus, hasInterests } = useClerkSync();
+  // Sync Clerk identity → backend JWT
+  const { status: syncStatus } = useClerkSync();
 
   if (!isLoaded) return <LoadingSpinner />;
 
@@ -41,15 +42,8 @@ const App = () => {
           {/* Clerk OAuth SSO callback — must be outside all layouts */}
           <Route path="/sso-callback" element={<SSOCallback />} />
 
-          {/* Onboarding — shown once after first sign-in (no layout wrapper) */}
-          <Route
-            path="/onboarding"
-            element={
-              <SignedIn>
-                <Onboarding />
-              </SignedIn>
-            }
-          />
+          {/* Onboarding route disabled — all users go directly to dashboard */}
+          {/* <Route path="/onboarding" element={<SignedIn><Onboarding /></SignedIn>} /> */}
 
           {/* Protected dashboard area */}
           <Route
@@ -58,6 +52,18 @@ const App = () => {
               <SignedIn>
                 <DashboardLayout>
                   <Dashboard />
+                </DashboardLayout>
+              </SignedIn>
+            }
+          />
+
+          {/* Protected search area */}
+          <Route
+            path="/search"
+            element={
+              <SignedIn>
+                <DashboardLayout>
+                  <SearchResults />
                 </DashboardLayout>
               </SignedIn>
             }
@@ -73,12 +79,7 @@ const App = () => {
                     path="/"
                     element={
                       isSignedIn ? (
-                        // Redirect after login: onboard first-timers, else go to dashboard
-                        syncStatus === "done" && !hasInterests ? (
-                          <Navigate to="/onboarding" replace />
-                        ) : (
-                          <Navigate to="/dashboard" replace />
-                        )
+                        <Navigate to="/dashboard" replace />
                       ) : (
                         <Home />
                       )

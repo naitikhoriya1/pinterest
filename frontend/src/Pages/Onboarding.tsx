@@ -134,23 +134,31 @@ const Onboarding: React.FC = () => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
+        console.log(`[Onboarding] Deselected topic: ${id}. Total selected: ${next.size}`);
       } else if (next.size < REQUIRED) {
         next.add(id);
+        console.log(`[Onboarding] Selected topic: ${id}. Total selected: ${next.size}/${REQUIRED}`);
       }
       return next;
     });
   };
 
   const handleSave = async () => {
-    if (selected.size < REQUIRED) return;
+    if (selected.size < REQUIRED) {
+      console.warn(`[Onboarding] Cannot save: need ${REQUIRED} topics, but only ${selected.size} selected.`);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       const allTags = TOPICS.filter((t) => selected.has(t.id)).flatMap((t) => t.tags);
       const uniqueTags = [...new Set(allTags)];
+      console.log("[Onboarding] Submitting interests to /api/user/interests:", uniqueTags);
       await api.post("/api/user/interests", { tags: uniqueTags });
+      console.log("[Onboarding] ✅ Interests saved successfully. Navigating to /dashboard...");
       navigate("/dashboard", { replace: true });
     } catch (err: any) {
+      console.error("[Onboarding] ❌ Failed to save user interests:", err);
       setError(err.message ?? "Something went wrong. Please try again.");
       setSaving(false);
     }

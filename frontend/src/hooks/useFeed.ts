@@ -1,18 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
-import { api } from "../lib/api";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { apiFetch } from "../lib/api";
+import type { Pin } from "../types/pin";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-export interface Pin {
-  _id: string;
-  title: string;
-  description: string;
-  imageUrl: string;
-  width: number;
-  height: number;
-  tags: string[];
-  saveCount: number;
-  createdAt: string;
-}
+export type { Pin };
 
 interface FeedResponse {
   success: boolean;
@@ -20,61 +10,117 @@ interface FeedResponse {
   nextCursor: string | null;
 }
 
-// ── Hook ──────────────────────────────────────────────────────────────────────
 /**
- * useFeed — fetches the personalised pin feed from GET /api/pins/feed.
+ * useFeed(enabled: boolean)
  *
- * Uses cursor-based pagination keyed on `createdAt` (ISO string).
- * Call `loadMore()` to fetch the next page. Deduplicates by `_id`.
+ * Fetches the global reverse-chronological pin feed from GET /api/pins/feed.
+ * Uses cursor-based pagination keyed on `<ISO createdAt>_<ObjectId>`.
+ * Double-fetch protection via refs for React 18 StrictMode and observer firing.
  */
-export function useFeed() {
+export function useFeed(enabled: boolean) {
   const [pins, setPins] = useState<Pin[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
 
-  const fetchPage = useCallback(async (nextCursor: string | null = null) => {
+  const cursorRef = useRef<string | null>(null);
+  const loadingRef = useRef(false);
+  const hasMoreRef = useRef(true);
+
+  const fetchPage = useCallback(async (targetCursor: string | null) => {
+    console.log("[useFeed] fetchPage called with targetCursor:", targetCursor, {
+      currentlyLoading: loadingRef.current,
+      hasMore: hasMoreRef.current,
+    });
+
+    if (loadingRef.current) {
+      console.warn("[useFeed] ⚠️ Skipping fetchPage: already loading.");
+      return;
+    }
+    if (targetCursor !== null && !hasMoreRef.current) {
+      console.log("[useFeed] ℹ️ Skipping fetchPage: no more pins (hasMore is false).");
+      return;
+    }
+
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
-    try {
-      const qs = nextCursor ? `?cursor=${encodeURIComponent(nextCursor)}` : "";
-      const res = await api.get<FeedResponse>(`/api/pins/feed${qs}`);
 
-      setPins((prev) => {
-        // Deduplicate by _id in case of concurrent calls
-        const existingIds = new Set(prev.map((p) => p._id));
-        const fresh = res.data.filter((p) => !existingIds.has(p._id));
-        return nextCursor ? [...prev, ...fresh] : fresh;
+    try {
+      const url = targetCursor
+        ? `/api/pins/feed?limit=20&cursor=${encodeURIComponent(targetCursor)}`
+        : "/api/pins/feed?limit=20";
+
+      console.log("[useFeed] Fetching feed from API:", url);
+      const res = await apiFetch<FeedResponse>(url);
+
+      console.log("[useFeed] API returned feed response:", {
+        pinCount: res.data?.length ?? 0,
+        nextCursor: res.nextCursor,
       });
 
-      setCursor(res.nextCursor);
-      setHasMore(res.nextCursor !== null);
+      setPins((prev) => {
+        const existingIds = new Set(prev.map((p) => p._id));
+        const fresh = (res.data || []).filter((p) => !existingIds.has(p._id));
+        console.log(`[useFeed] Deduplication: ${prev.length} existing + ${fresh.length} fresh pins (${res.data.length - fresh.length} duplicates filtered).`);
+        return targetCursor ? [...prev, ...fresh] : fresh;
+      });
+
+      const nextHasMore = res.nextCursor !== null;
+      cursorRef.current = res.nextCursor;
+      hasMoreRef.current = nextHasMore;
+      setHasMore(nextHasMore);
+
+      console.log("[useFeed] State updated: hasMore =", nextHasMore, "nextCursor =", res.nextCursor);
     } catch (err: any) {
-      setError(err.message ?? "Failed to load feed");
+      const msg = err?.message ?? "Failed to load feed";
+      console.error("[useFeed] ❌ ERROR fetching feed page:", {
+        error: msg,
+        targetCursor,
+      });
+      setError(msg);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, []);
 
-  // Initial load on mount
+  // Loads the first page only when enabled is true and no pins are loaded yet
   useEffect(() => {
-    fetchPage(null);
-  }, [fetchPage]);
+    console.log("[useFeed] enabled effect triggered:", {
+      enabled,
+      pinsCount: pins.length,
+      loading: loadingRef.current,
+      hasMore: hasMoreRef.current,
+    });
+
+    if (enabled && pins.length === 0 && !loadingRef.current && hasMoreRef.current) {
+      console.log("[useFeed] Loading initial feed page (cursor = null)...");
+      fetchPage(null);
+    }
+  }, [enabled, pins.length, fetchPage]);
 
   /** Call this to fetch the next batch of pins */
   const loadMore = useCallback(() => {
-    if (!loading && hasMore) fetchPage(cursor);
-  }, [loading, hasMore, cursor, fetchPage]);
-
-  /** Reset and reload from the top (e.g. pull-to-refresh) */
-  const refresh = useCallback(() => {
-    setPins([]);
-    setCursor(null);
-    setHasMore(true);
-    fetchPage(null);
+    console.log("[useFeed] loadMore() triggered:", {
+      cursor: cursorRef.current,
+      loading: loadingRef.current,
+      hasMore: hasMoreRef.current,
+    });
+    if (!loadingRef.current && hasMoreRef.current) {
+      fetchPage(cursorRef.current);
+    } else {
+      console.log("[useFeed] loadMore() bypassed (already loading or no more items).");
+    }
   }, [fetchPage]);
 
-  return { pins, loading, hasMore, error, loadMore, refresh };
+  /** Retry fetching after error (either first page or next page) */
+  const retry = useCallback(() => {
+    console.log("[useFeed] retry() triggered with cursor:", cursorRef.current);
+    if (!loadingRef.current) {
+      fetchPage(cursorRef.current);
+    }
+  }, [fetchPage]);
+
+  return { pins, setPins, loading, error, hasMore, loadMore, retry };
 }
- 

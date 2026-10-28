@@ -12,7 +12,10 @@ export const requireAuth = (
 ): void => {
   const header = req.headers.authorization;
   if (!header || !header.startsWith("Bearer ")) {
-    res.status(401).json({ success: false, message: "Unauthorized" });
+    console.warn(
+      `[requireAuth] ⚠️ 401 Unauthorized for ${req.method} ${req.originalUrl}: Missing or malformed Authorization header.`
+    );
+    res.status(401).json({ success: false, message: "Unauthorized: Missing Bearer token" });
     return;
   }
 
@@ -23,7 +26,11 @@ export const requireAuth = (
     };
     req.userId = payload.id;
     next();
-  } catch {
+  } catch (err: any) {
+    console.error(
+      `[requireAuth] ❌ 401 Invalid or expired token for ${req.method} ${req.originalUrl}:`,
+      err?.message || err
+    );
     res.status(401).json({ success: false, message: "Invalid or expired token" });
   }
 };

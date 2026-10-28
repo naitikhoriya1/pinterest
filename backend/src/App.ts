@@ -9,8 +9,25 @@ connectDB();
 
 const app = express();
 
-// ── Middleware ──────────────────────────────────────────────────────────────
-app.use(cors({ origin: "*", credentials: true }));
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  process.env.CLIENT_URL,
+].filter(Boolean) as string[];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // allow requests with no origin (like mobile apps, curl) or if origin is in allowedOrigins
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, true); // Allow all dev origins while supporting credentials
+      }
+    },
+    credentials: true,
+  })
+);
 app.use(helmet());
 app.use(express.json());
 

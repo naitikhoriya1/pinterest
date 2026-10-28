@@ -2,30 +2,9 @@ import { Response } from "express";
 import { Types } from "mongoose";
 import { AuthRequest } from "../../middleware/auth.middleware";
 import Pin from "./pin.model";
-import cloudinary from "../../config/cloudinary";
-import { uploadToCloudinary } from "../../middleware/upload.middleware";
-
-/**
- * Shared helper to validate and parse cursor `<ISO createdAt>_<ObjectId>`.
- * Returns { date, objectId } if valid, or null if malformed.
- */
-const parseCursor = (
-  cursor: unknown
-): { date: Date; objectId: Types.ObjectId } | null => {
-  if (typeof cursor !== "string") return null;
-  const parts = cursor.split("_");
-  if (parts.length !== 2) return null;
-  const [dateStr, idStr] = parts;
-  const date = new Date(dateStr);
-  if (
-    isNaN(date.getTime()) ||
-    !Types.ObjectId.isValid(idStr) ||
-    !/^[0-9a-fA-F]{24}$/.test(idStr)
-  ) {
-    return null;
-  }
-  return { date, objectId: new Types.ObjectId(idStr) };
-};
+import User from "../auth/auth.model";
+import Notification from "../notification/notification.model";
+import { parseCursor } from "../../utils/cursor";
 
 /**
  * GET /api/pins/feed?limit=<number>&cursor=<ISO_createdAt>_<ObjectId>
@@ -70,7 +49,6 @@ export const getFeed = async (req: AuthRequest, res: Response): Promise<void> =>
     const pins = await Pin.find(query)
       .sort({ createdAt: -1, _id: -1 })
       .limit(limit + 1)
-      .populate("owner", "username email avatarUrl")
       .lean();
 
     const hasMore = pins.length > limit;
@@ -160,7 +138,6 @@ export const searchPins = async (req: AuthRequest, res: Response): Promise<void>
     const pins = await Pin.find(query)
       .sort({ createdAt: -1, _id: -1 })
       .limit(limit + 1)
-      .populate("owner", "username email avatarUrl")
       .lean();
 
     const hasMore = pins.length > limit;
@@ -210,9 +187,7 @@ export const getMyPins = async (req: AuthRequest, res: Response): Promise<void> 
 export const getPinById = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     console.log("[pin.controller:getPinById] Fetching pin ID:", req.params.id);
-    const pin = await Pin.findById(req.params.id)
-      .populate("owner", "username email avatarUrl")
-      .lean();
+    const pin = await Pin.findById(req.params.id).lean();
     if (!pin) {
       console.warn("[pin.controller:getPinById] ⚠️ Pin not found:", req.params.id);
       res.status(404).json({ success: false, message: "Pin not found" });
@@ -231,99 +206,187 @@ export const getPinById = async (req: AuthRequest, res: Response): Promise<void>
 
 /**
  * POST /api/pins
- * Creates a new pin with image upload to Cloudinary.
- * Supports multipart/form-data (image file in req.file) or JSON (imageUrl in req.body).
+ * Creates a new pin with an image URL.
+ * Validates title, description, imageUrl, width, height, tags.
+ * Assigns owner from req.userId.
  */
 export const createPin = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, description } = req.body;
-    console.log("[pin.controller:createPin] Starting pin creation:", {
+    const { title, description, imageUrl, width, height, tags } = req.body;
+
+    console.log("[pin.controller:createPin] Pin creation request:", {
       userId: req.userId,
       title,
-      hasFile: Boolean(req.file),
-      fileMimetype: req.file?.mimetype,
-      fileSize: req.file?.size,
-      hasImageUrl: Boolean(req.body.imageUrl),
-    });
-
-    if (!title || typeof title !== "string" || !title.trim()) {
-      console.warn("[pin.controller:createPin] ⚠️ Missing title.");
-      res.status(400).json({ success: false, message: "Pin title is required" });
-      return;
-    }
-
-    let imageUrl = "";
-    let width = 800;
-    let height = 1200;
-    let cloudinaryId = "";
-
-    if (req.file) {
-      // 1. Upload local file buffer directly to Cloudinary
-      console.log("[pin.controller:createPin] Uploading image buffer to Cloudinary...");
-      const uploadResult = await uploadToCloudinary(req.file.buffer, "pinterest_pins");
-      console.log("[pin.controller:createPin] ✅ Cloudinary upload complete:", {
-        url: uploadResult.secure_url,
-        width: uploadResult.width,
-        height: uploadResult.height,
-        public_id: uploadResult.public_id,
-      });
-
-      imageUrl = uploadResult.secure_url;
-      width = uploadResult.width;
-      height = uploadResult.height;
-      cloudinaryId = uploadResult.public_id;
-    } else if (req.body.imageUrl) {
-      // 2. Upload from remote image URL or base64 data to Cloudinary
-      console.log("[pin.controller:createPin] Uploading remote URL to Cloudinary:", req.body.imageUrl);
-      const uploadResult = await cloudinary.uploader.upload(req.body.imageUrl, {
-        folder: "pinterest_pins",
-      });
-      console.log("[pin.controller:createPin] ✅ Cloudinary upload complete:", {
-        url: uploadResult.secure_url,
-        width: uploadResult.width,
-        height: uploadResult.height,
-        public_id: uploadResult.public_id,
-      });
-
-      imageUrl = uploadResult.secure_url;
-      width = uploadResult.width;
-      height = uploadResult.height;
-      cloudinaryId = uploadResult.public_id;
-    } else {
-      console.warn("[pin.controller:createPin] ⚠️ No image file or imageUrl provided.");
-      res.status(400).json({ success: false, message: "Image file or imageUrl is required" });
-      return;
-    }
-
-    // Process tags
-    let tags: string[] = [];
-    if (Array.isArray(req.body.tags)) {
-      tags = req.body.tags.map((t: string) => String(t).trim().toLowerCase()).filter(Boolean);
-    } else if (typeof req.body.tags === "string") {
-      try {
-        const parsed = JSON.parse(req.body.tags);
-        if (Array.isArray(parsed)) {
-          tags = parsed.map((t: string) => String(t).trim().toLowerCase()).filter(Boolean);
-        } else {
-          tags = req.body.tags.split(",").map((t: string) => t.trim().toLowerCase()).filter(Boolean);
-        }
-      } catch {
-        tags = req.body.tags.split(",").map((t: string) => t.trim().toLowerCase()).filter(Boolean);
-      }
-    }
-
-    const pin = await Pin.create({
-      owner: req.userId,
-      title: title.trim(),
-      description: (description || "").trim(),
       imageUrl,
       width,
       height,
-      tags,
-      cloudinaryId,
+      tagsCount: Array.isArray(tags) ? tags.length : undefined,
+    });
+
+    // 1. Title validation: required string, trimmed, 1-100 chars
+    if (!title || typeof title !== "string" || !title.trim() || title.trim().length > 100) {
+      console.warn("[pin.controller:createPin] ⚠️ Invalid title:", title);
+      res.status(400).json({
+        success: false,
+        message: "Title is required and must be between 1 and 100 characters",
+      });
+      return;
+    }
+
+    // 2. Description validation: optional string, max 500 chars
+    if (description !== undefined && description !== null && description !== "") {
+      if (typeof description !== "string" || description.trim().length > 500) {
+        console.warn("[pin.controller:createPin] ⚠️ Invalid description length");
+        res.status(400).json({
+          success: false,
+          message: "Description must be at most 500 characters",
+        });
+        return;
+      }
+    }
+
+    // 3. Image URL validation: required, max 2000 chars, protocol must be http: or https:
+    if (!imageUrl || typeof imageUrl !== "string" || !imageUrl.trim() || imageUrl.trim().length > 2000) {
+      console.warn("[pin.controller:createPin] ⚠️ Invalid imageUrl format or length");
+      res.status(400).json({
+        success: false,
+        message: "Image URL is required and must be at most 2000 characters",
+      });
+      return;
+    }
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(imageUrl.trim());
+    } catch {
+      console.warn("[pin.controller:createPin] ⚠️ Malformed imageUrl:", imageUrl);
+      res.status(400).json({ success: false, message: "Invalid image URL format" });
+      return;
+    }
+
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+      console.warn("[pin.controller:createPin] ⚠️ Disallowed protocol:", parsedUrl.protocol);
+      res.status(400).json({
+        success: false,
+        message: "Image URL must use http: or https: protocol",
+      });
+      return;
+    }
+
+    // 4. Width and height validation: finite numbers, integers between 1 and 10000
+    // If provided, must be finite integer between 1 and 10000. If omitted, default to 800x1200.
+    let numWidth = 800;
+    let numHeight = 1200;
+
+    if (width !== undefined && width !== null && width !== "") {
+      const parsedW = typeof width === "number" ? width : Number(width);
+      if (
+        !Number.isFinite(parsedW) ||
+        !Number.isInteger(parsedW) ||
+        parsedW < 1 ||
+        parsedW > 10000
+      ) {
+        console.warn("[pin.controller:createPin] ⚠️ Invalid width:", width);
+        res.status(400).json({
+          success: false,
+          message: "Width and height must be integers between 1 and 10000",
+        });
+        return;
+      }
+      numWidth = parsedW;
+    }
+
+    if (height !== undefined && height !== null && height !== "") {
+      const parsedH = typeof height === "number" ? height : Number(height);
+      if (
+        !Number.isFinite(parsedH) ||
+        !Number.isInteger(parsedH) ||
+        parsedH < 1 ||
+        parsedH > 10000
+      ) {
+        console.warn("[pin.controller:createPin] ⚠️ Invalid height:", height);
+        res.status(400).json({
+          success: false,
+          message: "Width and height must be integers between 1 and 10000",
+        });
+        return;
+      }
+      numHeight = parsedH;
+    }
+
+    // 5. Tags validation: optional array of strings, trim and lowercase, drop empties, de-dupe, max 10 tags, each max 30 chars
+    let processedTags: string[] = [];
+    if (tags !== undefined && tags !== null) {
+      if (!Array.isArray(tags)) {
+        res.status(400).json({ success: false, message: "Tags must be an array of strings" });
+        return;
+      }
+
+      const seen = new Set<string>();
+      for (const rawTag of tags) {
+        if (typeof rawTag !== "string") continue;
+        const clean = rawTag.trim().toLowerCase();
+        if (!clean) continue;
+        if (clean.length > 30) {
+          res.status(400).json({
+            success: false,
+            message: "Each tag must be 30 characters or fewer",
+          });
+          return;
+        }
+        if (!seen.has(clean)) {
+          seen.add(clean);
+          processedTags.push(clean);
+        }
+        if (processedTags.length > 10) {
+          res.status(400).json({
+            success: false,
+            message: "A maximum of 10 tags is allowed",
+          });
+          return;
+        }
+      }
+    }
+
+    // Store pin (owner is always req.userId; req.body.owner is ignored)
+    const pin = await Pin.create({
+      owner: req.userId,
+      title: title.trim(),
+      description: typeof description === "string" ? description.trim() : "",
+      imageUrl: imageUrl.trim(),
+      width: numWidth,
+      height: numHeight,
+      tags: processedTags,
     });
 
     console.log("[pin.controller:createPin] ✅ Pin record created in MongoDB:", pin._id);
+
+    // Create broadcast notification for all other users
+    try {
+      const uploader = await User.findById(req.userId).lean();
+      const actorName = uploader?.username || "Someone";
+      const actorAvatar = uploader?.avatarUrl;
+
+      await Notification.create({
+        type: "NEW_PIN",
+        actor: req.userId,
+        pin: pin._id,
+        actorName,
+        actorAvatar,
+        pinTitle: pin.title,
+        pinImageUrl: pin.imageUrl,
+      });
+
+      console.log(
+        "[pin.controller:createPin] ✅ Broadcast notification created for pin:",
+        pin._id
+      );
+    } catch (notifErr: any) {
+      console.error(
+        "[pin.controller:createPin] ⚠️ Failed to create notification (non-fatal):",
+        notifErr?.message || notifErr
+      );
+    }
 
     const populatedPin = await Pin.findById(pin._id)
       .populate("owner", "username email avatarUrl")
@@ -385,43 +448,70 @@ export const updatePin = async (req: AuthRequest, res: Response): Promise<void> 
 
 /**
  * DELETE /api/pins/:id
- * Deletes a pin and deletes its image asset from Cloudinary.
+ * Only the owner of a pin can delete it.
+ * Validates ObjectId, checks ownership, deletes from Pin, and cleans up notifications.
  */
 export const deletePin = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    console.log("[pin.controller:deletePin] Deleting pin ID:", req.params.id, "by user:", req.userId);
-    const pin = await Pin.findById(req.params.id);
+    const { id } = req.params;
+    const currentUserId = req.userId;
 
+    console.log("[pin.controller:deletePin] Delete request for pin ID:", id, "by user:", currentUserId);
+
+    // Validate :id format
+    if (!id || !Types.ObjectId.isValid(id) || !/^[0-9a-fA-F]{24}$/.test(id)) {
+      console.warn("[pin.controller:deletePin] ⚠️ Invalid pin id format:", id);
+      res.status(400).json({ success: false, message: "Invalid pin id" });
+      return;
+    }
+
+    // Load pin to check existence and ownership
+    const pin = await Pin.findById(id).select("owner");
     if (!pin) {
-      console.warn("[pin.controller:deletePin] ⚠️ Pin not found:", req.params.id);
+      console.warn("[pin.controller:deletePin] ⚠️ Pin not found:", id);
       res.status(404).json({ success: false, message: "Pin not found" });
       return;
     }
 
-    if (pin.owner.toString() !== req.userId?.toString()) {
-      console.warn("[pin.controller:deletePin] ⛔ Unauthorized delete attempt. Owner:", pin.owner, "Requester:", req.userId);
-      res.status(403).json({ success: false, message: "You are not authorized to delete this pin" });
+    // Compare like with like
+    if (pin.owner.toString() !== currentUserId?.toString()) {
+      console.warn(
+        "[pin.controller:deletePin] ⛔ Unauthorized delete attempt. Owner:",
+        pin.owner.toString(),
+        "Requester:",
+        currentUserId
+      );
+      res.status(403).json({
+        success: false,
+        message: "You can only delete your own pins",
+      });
       return;
     }
 
-    // Delete image from Cloudinary if public_id exists
-    if (pin.cloudinaryId) {
-      try {
-        console.log("[pin.controller:deletePin] Destroying Cloudinary asset:", pin.cloudinaryId);
-        await cloudinary.uploader.destroy(pin.cloudinaryId);
-        console.log("[pin.controller:deletePin] ✅ Cloudinary asset destroyed:", pin.cloudinaryId);
-      } catch (cloudErr: any) {
-        console.warn("[pin.controller:deletePin] ⚠️ Failed to delete Cloudinary asset:", cloudErr?.message || cloudErr);
-      }
+    // Delete enforcing ownership inside the delete query itself
+    const deleteResult = await Pin.deleteOne({ _id: id, owner: currentUserId });
+    if (deleteResult.deletedCount === 0) {
+      res.status(404).json({ success: false, message: "Pin not found" });
+      return;
     }
 
-    await pin.deleteOne();
-    console.log("[pin.controller:deletePin] ✅ Pin record deleted from MongoDB:", pin._id);
+    console.log("[pin.controller:deletePin] ✅ Pin record deleted from MongoDB:", id);
 
-    res.json({
+    // Clean up related notifications in its own isolated try/catch
+    try {
+      await Notification.deleteMany({ pin: id });
+      console.log("[pin.controller:deletePin] ✅ Cleaned up notifications for pin:", id);
+    } catch (notifErr: any) {
+      console.error(
+        "[pin.controller:deletePin] ⚠️ Failed to clean up notifications for pin:",
+        notifErr?.message || notifErr
+      );
+    }
+
+    res.status(200).json({
       success: true,
-      message: "Pin deleted successfully",
-      data: { _id: pin._id },
+      message: "Pin deleted",
+      id,
     });
   } catch (err: any) {
     console.error("[pin.controller:deletePin] ❌ Delete error:", err?.message || err);

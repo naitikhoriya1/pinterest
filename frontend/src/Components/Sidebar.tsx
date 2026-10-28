@@ -3,9 +3,9 @@ import { TiHome } from "react-icons/ti";
 import { MdExplore } from "react-icons/md";
 import { RiDashboardFill } from "react-icons/ri";
 import { FaRegPlusSquare } from "react-icons/fa";
-import { FaBell } from "react-icons/fa";
 import { LuMessageCircleMore } from "react-icons/lu";
 import { FaPinterest } from "react-icons/fa";
+import NotificationBell from "./NotificationBell";
 
 const Sidebar = () => {
   const iconClass =
@@ -33,9 +33,7 @@ const Sidebar = () => {
       <div title="Create Pin" onClick={handleCreatePin}>
         <FaRegPlusSquare className={`${iconClass} text-[#e60023] hover:bg-red-50`} />
       </div>
-      <div title="Notifications">
-        <FaBell className={iconClass} />
-      </div>
+      <NotificationBell />
       <div title="Messages">
         <LuMessageCircleMore className={iconClass} />
       </div>

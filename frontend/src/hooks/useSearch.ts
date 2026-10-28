@@ -137,5 +137,9 @@ export function useSearch(query: string, enabled: boolean) {
     }
   }, [fetchPage, trimmedQuery, enabled]);
 
-  return { pins, loading, error, hasMore, loadMore, retry };
+  const removePin = useCallback((id: string) => {
+    setPins((prev) => prev.filter((p) => p._id !== id));
+  }, []);
+
+  return { pins, loading, error, hasMore, loadMore, retry, removePin };
 }

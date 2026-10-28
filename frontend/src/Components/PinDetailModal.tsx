@@ -29,7 +29,7 @@ const PinDetailModal: React.FC<PinDetailModalProps> = ({
       const ownerId =
         typeof pin.owner === "string"
           ? pin.owner
-          : (pin.owner as PinOwner)?._id;
+          : ((pin.owner as unknown) as PinOwner)?._id;
       const isOwner = Boolean(currentUserId && ownerId && currentUserId === ownerId);
 
       console.log("[PinDetailModal] Opened for pin:", {
@@ -50,11 +50,11 @@ const PinDetailModal: React.FC<PinDetailModalProps> = ({
   const ownerId =
     typeof pin.owner === "string"
       ? pin.owner
-      : (pin.owner as PinOwner)?._id;
+      : ((pin.owner as unknown) as PinOwner)?._id;
 
   const isOwner = Boolean(currentUserId && ownerId && currentUserId === ownerId);
 
-  const ownerObj = typeof pin.owner === "object" ? (pin.owner as PinOwner) : null;
+  const ownerObj = typeof pin.owner === "object" ? ((pin.owner as unknown) as PinOwner) : null;
   const ownerName = ownerObj?.username || ownerObj?.email?.split("@")[0] || "Pinterest User";
   const ownerAvatar = ownerObj?.avatarUrl;
 

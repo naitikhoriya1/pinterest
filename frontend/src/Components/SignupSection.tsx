@@ -1,5 +1,5 @@
 import React from "react";
-import { SignedOut, SignedIn } from "@clerk/clerk-react";
+import { SignedOut } from "@clerk/clerk-react";
 import GoogleAuthButton from "./GoogleAuthButton";
 
 const SignupSection: React.FC = () => {

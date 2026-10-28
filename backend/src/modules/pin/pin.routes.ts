@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.middleware";
-import { upload } from "../../middleware/upload.middleware";
 import {
   getFeed,
   searchPins,
@@ -13,15 +12,16 @@ import {
 
 const router = Router();
 
+// ── Mutation routes (Create declared before /:id) ───────────────────────────
+router.post("/", requireAuth, createPin);
+
 // ── GET routes ───────────────────────────────────────────────────────────────
-// Keep /feed, /search, and /user/me before /:id so Express doesn't match them as an ID param
 router.get("/feed", requireAuth, getFeed);
 router.get("/search", requireAuth, searchPins);
 router.get("/user/me", requireAuth, getMyPins);
 router.get("/:id", requireAuth, getPinById);
 
-// ── Mutation routes (Create, Update, Delete) ─────────────────────────────────
-router.post("/", requireAuth, upload.single("image"), createPin);
+// ── Remaining Mutation routes ───────────────────────────────────────────────
 router.patch("/:id", requireAuth, updatePin);
 router.put("/:id", requireAuth, updatePin);
 router.delete("/:id", requireAuth, deletePin);

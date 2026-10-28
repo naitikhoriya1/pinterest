@@ -10,7 +10,6 @@ import { useClerkSync } from "./hooks/useClerkSync";
 const Home = lazy(() => import("./Pages/Home"));
 const Dashboard = lazy(() => import("./Pages/Dashboard"));
 const SearchResults = lazy(() => import("./Pages/SearchResults"));
-const Onboarding = lazy(() => import("./Pages/Onboarding"));
 const About = lazy(() => import("./Pages/About"));
 const Businesses = lazy(() => import("./Pages/Businesses"));
 const Create = lazy(() => import("./Pages/Create"));
@@ -69,6 +68,18 @@ const App = () => {
             }
           />
 
+          {/* Protected create area */}
+          <Route
+            path="/create"
+            element={
+              <SignedIn>
+                <DashboardLayout>
+                  <Create />
+                </DashboardLayout>
+              </SignedIn>
+            }
+          />
+
           {/* Public / marketing pages */}
           <Route
             path="/*"
@@ -87,7 +98,6 @@ const App = () => {
                   />
                   <Route path="/about" element={<About />} />
                   <Route path="/businesses" element={<Businesses />} />
-                  <Route path="/create" element={<Create />} />
                   <Route path="/news" element={<News />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>

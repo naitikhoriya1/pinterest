@@ -122,5 +122,9 @@ export function useFeed(enabled: boolean) {
     }
   }, [fetchPage]);
 
-  return { pins, setPins, loading, error, hasMore, loadMore, retry };
+  const removePin = useCallback((id: string) => {
+    setPins((prev) => prev.filter((p) => p._id !== id));
+  }, []);
+
+  return { pins, setPins, loading, error, hasMore, loadMore, retry, removePin };
 }

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { useClerkSync } from "../hooks/useClerkSync";
 import { useFeed } from "../hooks/useFeed";
+import { api, apiFetch } from "../lib/api";
 import MasonryGrid1 from "../Components/MasonryGrid1";
 import CreatePinModal from "../Components/CreatePinModal";
 import PinDetailModal from "../Components/PinDetailModal";
@@ -13,14 +15,50 @@ import type { Pin } from "../types/pin";
 // Provides full CRUD operations with Cloudinary image upload and infinite scroll.
 
 const Dashboard = () => {
-  const { isSynced, apiUser } = useClerkSync();
-  const { pins, setPins, loading, error, hasMore, loadMore, retry } = useFeed(isSynced);
+  const { isSynced, apiUser, currentUserId } = useClerkSync();
+  const { pins, setPins, loading, error, hasMore, loadMore, retry, removePin } = useFeed(isSynced);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const pinIdParam = searchParams.get("pinId") || searchParams.get("pin");
 
   // Modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedPin, setSelectedPin] = useState<Pin | null>(null);
   const [editingPin, setEditingPin] = useState<Pin | null>(null);
+
+  // Deep-link to open pin from notification click (?pinId=...)
+  useEffect(() => {
+    if (!pinIdParam) return;
+
+    // Check if the pin is already loaded in feed
+    const existing = pins.find((p) => p._id === pinIdParam);
+    if (existing) {
+      setSelectedPin(existing);
+      return;
+    }
+
+    // Otherwise fetch the pin directly
+    let isCancelled = false;
+    const fetchTargetPin = async () => {
+      try {
+        console.log("[Dashboard] Fetching pin from URL param:", pinIdParam);
+        const res = await api.get<{ success: boolean; data: Pin }>(
+          `/api/pins/${pinIdParam}`
+        );
+        if (!isCancelled && res.success && res.data) {
+          setSelectedPin(res.data);
+        }
+      } catch (err) {
+        console.error("[Dashboard] Failed to fetch pin for detail modal:", err);
+      }
+    };
+
+    fetchTargetPin();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [pinIdParam, pins]);
 
   useEffect(() => {
     console.log("[Dashboard] Rendered with state:", {
@@ -89,9 +127,31 @@ const Dashboard = () => {
 
   const handlePinDeleted = (deletedPinId: string) => {
     console.log("[Dashboard] 🗑️ Pin deleted callback received for ID:", deletedPinId);
-    setPins((prev) => prev.filter((p) => p._id !== deletedPinId));
+    removePin(deletedPinId);
     if (selectedPin?._id === deletedPinId) {
       setSelectedPin(null);
+    }
+  };
+
+  const handleDeletePin = async (pinId: string) => {
+    try {
+      console.log("[Dashboard] Deleting pin:", pinId);
+      await apiFetch(`/api/pins/${pinId}`, { method: "DELETE" });
+      removePin(pinId);
+      if (selectedPin?._id === pinId) {
+        setSelectedPin(null);
+      }
+    } catch (err: any) {
+      if (err?.status === 404 || err?.message?.includes("404") || err?.message === "Pin not found") {
+        console.warn("[Dashboard] Pin was already deleted (404), removing locally:", pinId);
+        removePin(pinId);
+        if (selectedPin?._id === pinId) {
+          setSelectedPin(null);
+        }
+        return;
+      }
+      console.error("[Dashboard] Failed to delete pin:", err);
+      throw err;
     }
   };
 
@@ -186,7 +246,12 @@ const Dashboard = () => {
       </div>
 
       {/* Masonry pin grid */}
-      <MasonryGrid1 pins={pins} onPinClick={handlePinClick} />
+      <MasonryGrid1
+        pins={pins}
+        onPinClick={handlePinClick}
+        currentUserId={currentUserId ?? apiUser?._id}
+        onDelete={handleDeletePin}
+      />
 
       {/* Infinite-scroll sentinel — when it enters view, loadMore fires */}
       <div ref={sentinelRef} className="h-1" />
@@ -240,6 +305,17 @@ const Dashboard = () => {
         onClose={() => {
           console.log("[Dashboard] Closing PinDetailModal");
           setSelectedPin(null);
+          if (searchParams.get("pinId") || searchParams.get("pin")) {
+            setSearchParams(
+              (prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete("pinId");
+                next.delete("pin");
+                return next;
+              },
+              { replace: true }
+            );
+          }
         }}
         onEdit={(pin) => {
           console.log("[Dashboard] Initiating edit for pin:", pin._id);

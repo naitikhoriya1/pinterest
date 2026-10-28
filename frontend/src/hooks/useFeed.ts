@@ -11,13 +11,13 @@ interface FeedResponse {
 }
 
 /**
- * useFeed(enabled: boolean)
+ * useFeed(enabled: boolean, currentUserId?: string)
  *
  * Fetches the global reverse-chronological pin feed from GET /api/pins/feed.
  * Uses cursor-based pagination keyed on `<ISO createdAt>_<ObjectId>`.
- * Double-fetch protection via refs for React 18 StrictMode and observer firing.
+ * Resets and refetches when the active user changes to prevent cross-account viewer state pollution.
  */
-export function useFeed(enabled: boolean) {
+export function useFeed(enabled: boolean, currentUserId?: string) {
   const [pins, setPins] = useState<Pin[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +26,7 @@ export function useFeed(enabled: boolean) {
   const cursorRef = useRef<string | null>(null);
   const loadingRef = useRef(false);
   const hasMoreRef = useRef(true);
+  const prevUserIdRef = useRef<string | undefined>(currentUserId);
 
   const fetchPage = useCallback(async (targetCursor: string | null) => {
     console.log("[useFeed] fetchPage called with targetCursor:", targetCursor, {
@@ -85,6 +86,20 @@ export function useFeed(enabled: boolean) {
     }
   }, []);
 
+  // When active user changes (e.g. switch account or logout/login), reset feed so viewer state stays clean
+  useEffect(() => {
+    if (prevUserIdRef.current !== currentUserId) {
+      console.log(
+        `[useFeed] Active user changed from ${prevUserIdRef.current} to ${currentUserId}. Resetting feed.`
+      );
+      prevUserIdRef.current = currentUserId;
+      setPins([]);
+      cursorRef.current = null;
+      hasMoreRef.current = true;
+      loadingRef.current = false;
+    }
+  }, [currentUserId]);
+
   // Loads the first page only when enabled is true and no pins are loaded yet
   useEffect(() => {
     console.log("[useFeed] enabled effect triggered:", {
@@ -126,5 +141,11 @@ export function useFeed(enabled: boolean) {
     setPins((prev) => prev.filter((p) => p._id !== id));
   }, []);
 
-  return { pins, setPins, loading, error, hasMore, loadMore, retry, removePin };
+  const updatePin = useCallback((id: string, patch: Partial<Pin>) => {
+    setPins((prev) =>
+      prev.map((p) => (p._id === id ? { ...p, ...patch } : p))
+    );
+  }, []);
+
+  return { pins, setPins, loading, error, hasMore, loadMore, retry, removePin, updatePin };
 }

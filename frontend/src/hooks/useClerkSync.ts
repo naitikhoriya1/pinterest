@@ -8,6 +8,7 @@ interface ApiUser {
   _id: string;
   username: string;
   email: string;
+  clerkId?: string;
   interests: Record<string, number>;
   avatarUrl?: string;
 }
@@ -22,15 +23,16 @@ interface UseClerkSyncResult {
 
 /**
  * Called once the Clerk session is active.
- * 1. Exchanges Clerk identity for a backend JWT via POST /api/auth/clerk-sync.
- * 2. Stores the token in localStorage and sets isSynced = true.
- * 3. Checks whether the user has completed interest onboarding.
+ * 1. Checks if stored token matches the active Clerk user (user.id).
+ * 2. If valid and matches current user, keeps it.
+ * 3. Otherwise exchanges Clerk identity for a fresh backend JWT via POST /api/auth/clerk-sync.
+ * 4. Cleans up token when user signs out or switches account.
  */
 export function useClerkSync(): UseClerkSyncResult {
   const { user, isSignedIn, isLoaded } = useUser();
   const [status, setStatus] = useState<SyncStatus>("idle");
   const [apiUser, setApiUser] = useState<ApiUser | null>(null);
-  const [isSynced, setIsSynced] = useState<boolean>(() => Boolean(getToken()));
+  const [isSynced, setIsSynced] = useState<boolean>(false);
 
   useEffect(() => {
     console.log("[useClerkSync] Auth State Changed:", {
@@ -46,28 +48,42 @@ export function useClerkSync(): UseClerkSyncResult {
     }
 
     if (!isSignedIn || !user) {
-      console.log("[useClerkSync] User is not signed in.");
+      console.log("[useClerkSync] User is not signed in. Clearing local auth state...");
+      clearToken();
+      setApiUser(null);
       setIsSynced(false);
+      setStatus("idle");
       return;
     }
 
     const sync = async () => {
       setStatus("syncing");
-      console.log("[useClerkSync] Initiating sync with backend...");
+      console.log("[useClerkSync] Initiating sync with backend for clerkId:", user.id);
 
       try {
         const existingToken = getToken();
 
-        // If an existing token is found, verify its validity via GET /api/user/me
+        // If an existing token is found, verify its validity AND ensure it belongs to the CURRENT Clerk user
         if (existingToken) {
           try {
             console.log("[useClerkSync] Validating existing token via GET /api/user/me...");
             const meRes = await api.get<{ success: boolean; data: ApiUser }>("/api/user/me");
-            console.log("[useClerkSync] Existing token is valid:", meRes.data);
-            setApiUser(meRes.data);
-            setIsSynced(true);
-            setStatus("done");
-            return;
+
+            // Critical check: Ensure the stored token actually belongs to the active Clerk user
+            if (meRes.data && meRes.data.clerkId === user.id) {
+              console.log("[useClerkSync] Existing token matches current Clerk user:", meRes.data);
+              setApiUser(meRes.data);
+              setIsSynced(true);
+              setStatus("done");
+              return;
+            } else {
+              console.warn(
+                `[useClerkSync] ⚠️ Stored token belongs to a different user (${meRes.data?.clerkId} !== ${user.id}). Clearing token and re-syncing...`
+              );
+              clearToken();
+              setIsSynced(false);
+              setApiUser(null);
+            }
           } catch (tokenErr: any) {
             console.warn(
               "[useClerkSync] ⚠️ Stored token invalid or expired. Clearing token and re-authenticating with Clerk...",
@@ -75,6 +91,7 @@ export function useClerkSync(): UseClerkSyncResult {
             );
             clearToken();
             setIsSynced(false);
+            setApiUser(null);
           }
         }
 
@@ -83,7 +100,7 @@ export function useClerkSync(): UseClerkSyncResult {
         const payload = {
           clerkId: user.id,
           email: primaryEmail,
-          username: user.username ?? user.firstName ?? primaryEmail.split("@")[0],
+          username: user.username ?? user.firstName ?? primaryEmail.split("@")[0] ?? "user",
           avatarUrl: user.imageUrl,
         };
 

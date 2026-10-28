@@ -9,6 +9,7 @@ import {
   updatePin,
   deletePin,
 } from "./pin.controller";
+import { likePin, unlikePin } from "../like/like.controller";
 
 const router = Router();
 
@@ -20,6 +21,10 @@ router.get("/feed", requireAuth, getFeed);
 router.get("/search", requireAuth, searchPins);
 router.get("/user/me", requireAuth, getMyPins);
 router.get("/:id", requireAuth, getPinById);
+
+// ── Like / Unlike routes ────────────────────────────────────────────────────
+router.put("/:id/like", requireAuth, likePin);
+router.delete("/:id/like", requireAuth, unlikePin);
 
 // ── Remaining Mutation routes ───────────────────────────────────────────────
 router.patch("/:id", requireAuth, updatePin);

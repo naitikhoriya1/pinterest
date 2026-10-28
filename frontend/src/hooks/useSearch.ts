@@ -10,12 +10,13 @@ interface SearchResponse {
 }
 
 /**
- * useSearch(query: string, enabled: boolean)
+ * useSearch(query: string, enabled: boolean, currentUserId?: string)
  *
  * Searches pins by title with case-insensitive partial match and cursor pagination.
  * Includes race-condition guard (requestId + AbortController) and StrictMode double-fetch protection.
+ * Resets and refetches when currentUserId changes.
  */
-export function useSearch(query: string, enabled: boolean) {
+export function useSearch(query: string, enabled: boolean, currentUserId?: string) {
   const [pins, setPins] = useState<Pin[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +96,7 @@ export function useSearch(query: string, enabled: boolean) {
     []
   );
 
-  // When query or enabled changes: reset state and fetch page 1
+  // When query, enabled, or currentUserId changes: reset state and fetch page 1
   useEffect(() => {
     currentQueryRef.current = trimmedQuery;
     requestIdRef.current += 1;
@@ -121,7 +122,7 @@ export function useSearch(query: string, enabled: boolean) {
 
     console.log(`[useSearch] Starting new search for "${trimmedQuery}" (reqId: ${currentReqId})`);
     fetchPage(null, trimmedQuery, currentReqId);
-  }, [trimmedQuery, enabled, fetchPage]);
+  }, [trimmedQuery, enabled, currentUserId, fetchPage]);
 
   /** Call this to fetch the next batch of search results */
   const loadMore = useCallback(() => {
@@ -141,5 +142,11 @@ export function useSearch(query: string, enabled: boolean) {
     setPins((prev) => prev.filter((p) => p._id !== id));
   }, []);
 
-  return { pins, loading, error, hasMore, loadMore, retry, removePin };
+  const updatePin = useCallback((id: string, patch: Partial<Pin>) => {
+    setPins((prev) =>
+      prev.map((p) => (p._id === id ? { ...p, ...patch } : p))
+    );
+  }, []);
+
+  return { pins, loading, error, hasMore, loadMore, retry, removePin, updatePin };
 }

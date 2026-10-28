@@ -4,7 +4,46 @@ import { AuthRequest } from "../../middleware/auth.middleware";
 import Pin from "./pin.model";
 import User from "../auth/auth.model";
 import Notification from "../notification/notification.model";
+import Like from "../like/like.model";
+import Comment from "../comment/comment.model";
 import { parseCursor } from "../../utils/cursor";
+
+/**
+ * Attaches viewer state (likedByMe) and ensures default counters (likeCount, commentCount)
+ * using a single batch Like query for the entire pin list.
+ */
+export const withViewerState = async (
+  pins: any[],
+  userId?: string
+): Promise<any[]> => {
+  if (!pins || pins.length === 0) return [];
+  const pinIds = pins.map((p) => p._id);
+  let likedPinIdSet = new Set<string>();
+
+  if (userId && Types.ObjectId.isValid(userId)) {
+    try {
+      const likes = await Like.find({
+        user: new Types.ObjectId(userId),
+        pin: { $in: pinIds },
+      })
+        .select("pin")
+        .lean();
+      likedPinIdSet = new Set(likes.map((l) => l.pin.toString()));
+    } catch (likeErr: any) {
+      console.error(
+        "[pin.controller:withViewerState] ⚠️ Error querying likes for viewer state:",
+        likeErr?.message || likeErr
+      );
+    }
+  }
+
+  return pins.map((p) => ({
+    ...p,
+    likeCount: p.likeCount ?? 0,
+    commentCount: p.commentCount ?? 0,
+    likedByMe: likedPinIdSet.has(p._id.toString()),
+  }));
+};
 
 /**
  * GET /api/pins/feed?limit=<number>&cursor=<ISO_createdAt>_<ObjectId>
@@ -65,7 +104,9 @@ export const getFeed = async (req: AuthRequest, res: Response): Promise<void> =>
       nextCursor,
     });
 
-    res.json({ success: true, data, nextCursor });
+    const dataWithViewerState = await withViewerState(data, req.userId);
+
+    res.json({ success: true, data: dataWithViewerState, nextCursor });
   } catch (err: any) {
     console.error("[pin.controller:getFeed] ❌ Server error:", err?.message || err);
     res.status(500).json({ success: false, message: err.message || "Server error" });
@@ -155,7 +196,9 @@ export const searchPins = async (req: AuthRequest, res: Response): Promise<void>
       nextCursor,
     });
 
-    res.json({ success: true, data, nextCursor, query: q });
+    const dataWithViewerState = await withViewerState(data, req.userId);
+
+    res.json({ success: true, data: dataWithViewerState, nextCursor, query: q });
   } catch (err: any) {
     console.error("[pin.controller:searchPins] ❌ Server error:", err?.message || err);
     res.status(500).json({ success: false, message: err.message || "Server error" });
@@ -173,7 +216,8 @@ export const getMyPins = async (req: AuthRequest, res: Response): Promise<void> 
       .sort({ createdAt: -1 })
       .lean();
     console.log("[pin.controller:getMyPins] Found", pins.length, "pins for user.");
-    res.json({ success: true, data: pins });
+    const pinsWithState = await withViewerState(pins, req.userId);
+    res.json({ success: true, data: pinsWithState });
   } catch (err: any) {
     console.error("[pin.controller:getMyPins] ❌ Error:", err?.message || err);
     res.status(500).json({ success: false, message: err.message || "Server error" });
@@ -197,7 +241,8 @@ export const getPinById = async (req: AuthRequest, res: Response): Promise<void>
       id: pin._id,
       title: pin.title,
     });
-    res.json({ success: true, data: pin });
+    const [pinWithViewerState] = await withViewerState([pin], req.userId);
+    res.json({ success: true, data: pinWithViewerState });
   } catch (err: any) {
     console.error("[pin.controller:getPinById] ❌ Error:", err?.message || err);
     res.status(500).json({ success: false, message: err.message });
@@ -388,11 +433,10 @@ export const createPin = async (req: AuthRequest, res: Response): Promise<void> 
       );
     }
 
-    const populatedPin = await Pin.findById(pin._id)
-      .populate("owner", "username email avatarUrl")
-      .lean();
+    const createdPin = await Pin.findById(pin._id).lean();
+    const [withState] = await withViewerState([createdPin], req.userId);
 
-    res.status(201).json({ success: true, data: populatedPin });
+    res.status(201).json({ success: true, data: withState });
   } catch (err: any) {
     console.error("[pin.controller:createPin] ❌ Pin creation error:", err?.message || err);
     res.status(500).json({ success: false, message: err.message || "Failed to create pin" });
@@ -435,11 +479,10 @@ export const updatePin = async (req: AuthRequest, res: Response): Promise<void> 
     await pin.save();
     console.log("[pin.controller:updatePin] ✅ Pin updated successfully:", pin._id);
 
-    const updated = await Pin.findById(pin._id)
-      .populate("owner", "username email avatarUrl")
-      .lean();
+    const updated = await Pin.findById(pin._id).lean();
+    const [withState] = await withViewerState([updated], req.userId);
 
-    res.json({ success: true, data: updated });
+    res.json({ success: true, data: withState });
   } catch (err: any) {
     console.error("[pin.controller:updatePin] ❌ Update error:", err?.message || err);
     res.status(500).json({ success: false, message: err.message || "Failed to update pin" });
@@ -505,6 +548,28 @@ export const deletePin = async (req: AuthRequest, res: Response): Promise<void> 
       console.error(
         "[pin.controller:deletePin] ⚠️ Failed to clean up notifications for pin:",
         notifErr?.message || notifErr
+      );
+    }
+
+    // Clean up related likes in its own isolated try/catch
+    try {
+      await Like.deleteMany({ pin: id });
+      console.log("[pin.controller:deletePin] ✅ Cleaned up likes for pin:", id);
+    } catch (likeErr: any) {
+      console.error(
+        "[pin.controller:deletePin] ⚠️ Failed to clean up likes for pin:",
+        likeErr?.message || likeErr
+      );
+    }
+
+    // Clean up related comments in its own isolated try/catch
+    try {
+      await Comment.deleteMany({ pin: id });
+      console.log("[pin.controller:deletePin] ✅ Cleaned up comments for pin:", id);
+    } catch (commentErr: any) {
+      console.error(
+        "[pin.controller:deletePin] ⚠️ Failed to clean up comments for pin:",
+        commentErr?.message || commentErr
       );
     }
 

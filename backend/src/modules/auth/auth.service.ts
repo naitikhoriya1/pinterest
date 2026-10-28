@@ -47,13 +47,13 @@ export const clerkSyncUser = async (opts: {
   let user = await User.findOne({ clerkId: opts.clerkId });
 
   if (!user) {
-    // Also try matching by email (handles accounts created before Clerk)
+    // Also try matching by email (handles legacy accounts created before Clerk)
     user = await User.findOne({ email: opts.email });
-    if (user) {
+    if (user && !user.clerkId) {
       user.clerkId = opts.clerkId;
       if (opts.avatarUrl) user.avatarUrl = opts.avatarUrl;
       await user.save();
-    } else {
+    } else if (!user) {
       user = await User.create({
         clerkId: opts.clerkId,
         email: opts.email,

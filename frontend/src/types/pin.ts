@@ -15,6 +15,9 @@ export interface Pin {
   height: number;
   tags: string[];
   saveCount: number;
+  likeCount: number;
+  commentCount: number;
+  likedByMe: boolean;
   cloudinaryId?: string;
   createdAt: string;
 }

@@ -3,6 +3,7 @@ import { useSearchParams, Navigate, Link } from "react-router-dom";
 import { ArrowLeft, Search } from "lucide-react";
 import { useClerkSync } from "../hooks/useClerkSync";
 import { useSearch } from "../hooks/useSearch";
+import { useLikeToggle } from "../hooks/useLikeToggle";
 import { apiFetch } from "../lib/api";
 import MasonryGrid1 from "../Components/MasonryGrid1";
 import PinDetailModal from "../Components/PinDetailModal";
@@ -24,18 +25,16 @@ const SearchResults = () => {
   }
 
   const { isSynced, apiUser, currentUserId } = useClerkSync();
-  const { pins, loading, error, hasMore, loadMore, retry, removePin } = useSearch(q, isSynced);
+  const { pins, loading, error, hasMore, loadMore, retry, removePin, updatePin } = useSearch(q, isSynced, currentUserId);
+  const { toggleLike } = useLikeToggle(updatePin);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Modal states for pin viewing / editing
-  const [selectedPin, setSelectedPin] = useState<Pin | null>(null);
+  const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   const [editingPin, setEditingPin] = useState<Pin | null>(null);
-  const [localPins, setLocalPins] = useState<Pin[]>([]);
 
-  // Sync pins from hook into localPins for optimistic edit/delete
-  useEffect(() => {
-    setLocalPins(pins);
-  }, [pins]);
+  // Derive selected pin from hook's pins list so counts stay synchronized and modal auto-closes if deleted
+  const selectedPin = pins.find((p) => p._id === selectedPinId) || null;
 
   // Infinite scroll: trigger loadMore when sentinel enters viewport
   useEffect(() => {
@@ -58,19 +57,13 @@ const SearchResults = () => {
 
   // Handle edit / delete in search results
   const handlePinUpdated = (updatedPin: Pin) => {
-    setLocalPins((prev) =>
-      prev.map((p) => (p._id === updatedPin._id ? updatedPin : p))
-    );
-    if (selectedPin?._id === updatedPin._id) {
-      setSelectedPin(updatedPin);
-    }
+    updatePin(updatedPin._id, updatedPin);
   };
 
   const handlePinDeleted = (deletedPinId: string) => {
     removePin(deletedPinId);
-    setLocalPins((prev) => prev.filter((p) => p._id !== deletedPinId));
-    if (selectedPin?._id === deletedPinId) {
-      setSelectedPin(null);
+    if (selectedPinId === deletedPinId) {
+      setSelectedPinId(null);
     }
   };
 
@@ -79,17 +72,15 @@ const SearchResults = () => {
       console.log("[SearchResults] Deleting pin:", pinId);
       await apiFetch(`/api/pins/${pinId}`, { method: "DELETE" });
       removePin(pinId);
-      setLocalPins((prev) => prev.filter((p) => p._id !== pinId));
-      if (selectedPin?._id === pinId) {
-        setSelectedPin(null);
+      if (selectedPinId === pinId) {
+        setSelectedPinId(null);
       }
     } catch (err: any) {
       if (err?.status === 404 || err?.message?.includes("404") || err?.message === "Pin not found") {
         console.warn("[SearchResults] Pin was already deleted (404), removing locally:", pinId);
         removePin(pinId);
-        setLocalPins((prev) => prev.filter((p) => p._id !== pinId));
-        if (selectedPin?._id === pinId) {
-          setSelectedPin(null);
+        if (selectedPinId === pinId) {
+          setSelectedPinId(null);
         }
         return;
       }
@@ -99,7 +90,7 @@ const SearchResults = () => {
   };
 
   // ── Initial loading state ──────────────────────────────────────────────────
-  if (loading && localPins.length === 0) {
+  if (loading && pins.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#e60023]" />
@@ -109,7 +100,7 @@ const SearchResults = () => {
   }
 
   // ── Error state (when no pins loaded yet) ──────────────────────────────────
-  if (error && localPins.length === 0) {
+  if (error && pins.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-6">
         <span className="text-4xl">😕</span>
@@ -126,7 +117,7 @@ const SearchResults = () => {
   }
 
   // ── Empty state (no pins matched search query) ────────────────────────────
-  if (!loading && localPins.length === 0) {
+  if (!loading && pins.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-6">
         <div className="p-4 bg-gray-100 rounded-full text-gray-400 mb-2">
@@ -173,8 +164,10 @@ const SearchResults = () => {
 
       {/* Masonry grid */}
       <MasonryGrid1
-        pins={localPins}
-        onPinClick={(pin) => setSelectedPin(pin)}
+        pins={pins}
+        onPinClick={(pin) => setSelectedPinId(pin._id)}
+        onOpenPin={(id) => setSelectedPinId(id)}
+        onToggleLike={toggleLike}
         currentUserId={currentUserId ?? apiUser?._id}
         onDelete={handleDeletePin}
       />
@@ -183,7 +176,7 @@ const SearchResults = () => {
       <div ref={sentinelRef} className="h-1" />
 
       {/* Loading more state */}
-      {loading && localPins.length > 0 && (
+      {loading && pins.length > 0 && (
         <div className="flex flex-col items-center justify-center py-8 gap-2">
           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#e60023]" />
           <p className="text-gray-500 text-sm font-medium">Loading more results...</p>
@@ -191,7 +184,7 @@ const SearchResults = () => {
       )}
 
       {/* Inline retry on load-more error */}
-      {error && localPins.length > 0 && (
+      {error && pins.length > 0 && (
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 py-6 text-center">
           <p className="text-sm text-red-600">Failed to load more results: {error}</p>
           <button
@@ -204,7 +197,7 @@ const SearchResults = () => {
       )}
 
       {/* End of results indicator */}
-      {!hasMore && localPins.length > 0 && (
+      {!hasMore && pins.length > 0 && (
         <p className="text-center text-gray-500 text-sm py-8 font-medium">
           No more results
         </p>
@@ -213,11 +206,14 @@ const SearchResults = () => {
       {/* Pin Detail Modal */}
       <PinDetailModal
         pin={selectedPin}
-        currentUserId={apiUser?._id}
-        isOpen={Boolean(selectedPin)}
-        onClose={() => setSelectedPin(null)}
-        onEdit={(pin) => setEditingPin(pin)}
-        onDelete={handlePinDeleted}
+        currentUserId={currentUserId ?? apiUser?._id}
+        onClose={() => setSelectedPinId(null)}
+        onToggleLike={toggleLike}
+        onCommentCountChange={(count) => {
+          if (selectedPinId) {
+            updatePin(selectedPinId, { commentCount: count });
+          }
+        }}
       />
 
       {/* Edit Pin Modal */}

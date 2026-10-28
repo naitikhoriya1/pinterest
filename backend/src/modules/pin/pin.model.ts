@@ -9,6 +9,8 @@ export interface IPin extends Document {
   height: number;
   tags: string[];
   saveCount: number;
+  likeCount: number;
+  commentCount: number;
   cloudinaryId?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -24,6 +26,8 @@ const pinSchema = new Schema<IPin>(
     height: { type: Number, required: true },
     tags: [{ type: String, lowercase: true, trim: true }],
     saveCount: { type: Number, default: 0 },
+    likeCount: { type: Number, default: 0, min: 0 },
+    commentCount: { type: Number, default: 0, min: 0 },
     cloudinaryId: { type: String, default: "" },
   },
   { timestamps: true }

@@ -7,6 +7,7 @@ export interface IUser extends Document {
   clerkId?: string;
   avatarUrl?: string;
   interests: Map<string, number>; // tag -> weight
+  notificationsLastReadAt?: Date;
   createdAt: Date;
 }
 
@@ -18,6 +19,7 @@ const userSchema = new Schema<IUser>(
     clerkId: { type: String, sparse: true, unique: true },
     avatarUrl: { type: String },
     interests: { type: Map, of: Number, default: {} },
+    notificationsLastReadAt: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );

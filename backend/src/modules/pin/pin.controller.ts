@@ -1,31 +1,11 @@
 import { Response } from "express";
-import { Types } from "mongoose";
 import { AuthRequest } from "../../middleware/auth.middleware";
 import Pin from "./pin.model";
+import User from "../auth/auth.model";
+import Notification from "../notification/notification.model";
 import cloudinary from "../../config/cloudinary";
 import { uploadToCloudinary } from "../../middleware/upload.middleware";
-
-/**
- * Shared helper to validate and parse cursor `<ISO createdAt>_<ObjectId>`.
- * Returns { date, objectId } if valid, or null if malformed.
- */
-const parseCursor = (
-  cursor: unknown
-): { date: Date; objectId: Types.ObjectId } | null => {
-  if (typeof cursor !== "string") return null;
-  const parts = cursor.split("_");
-  if (parts.length !== 2) return null;
-  const [dateStr, idStr] = parts;
-  const date = new Date(dateStr);
-  if (
-    isNaN(date.getTime()) ||
-    !Types.ObjectId.isValid(idStr) ||
-    !/^[0-9a-fA-F]{24}$/.test(idStr)
-  ) {
-    return null;
-  }
-  return { date, objectId: new Types.ObjectId(idStr) };
-};
+import { parseCursor } from "../../utils/cursor";
 
 /**
  * GET /api/pins/feed?limit=<number>&cursor=<ISO_createdAt>_<ObjectId>
@@ -324,6 +304,33 @@ export const createPin = async (req: AuthRequest, res: Response): Promise<void> 
     });
 
     console.log("[pin.controller:createPin] ✅ Pin record created in MongoDB:", pin._id);
+
+    // Create broadcast notification for all other users
+    try {
+      const uploader = await User.findById(req.userId).lean();
+      const actorName = uploader?.username || "Someone";
+      const actorAvatar = uploader?.avatarUrl;
+
+      await Notification.create({
+        type: "NEW_PIN",
+        actor: req.userId,
+        pin: pin._id,
+        actorName,
+        actorAvatar,
+        pinTitle: pin.title,
+        pinImageUrl: pin.imageUrl,
+      });
+
+      console.log(
+        "[pin.controller:createPin] ✅ Broadcast notification created for pin:",
+        pin._id
+      );
+    } catch (notifErr: any) {
+      console.error(
+        "[pin.controller:createPin] ⚠️ Failed to create notification (non-fatal):",
+        notifErr?.message || notifErr
+      );
+    }
 
     const populatedPin = await Pin.findById(pin._id)
       .populate("owner", "username email avatarUrl")

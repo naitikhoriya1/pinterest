@@ -35,10 +35,12 @@ app.use(express.json());
 import authRoutes from "./modules/auth/auth.routes";
 import pinRoutes from "./modules/pin/pin.routes";
 import userRoutes from "./modules/user/user.routes";
+import notificationRoutes from "./modules/notification/notification.routes";
 
 app.use("/api/auth", authRoutes);
 app.use("/api/pins", pinRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.get("/", (_, res) => res.send("Pinterest Backend API Running..."));
 

@@ -10,7 +10,6 @@ import { useClerkSync } from "./hooks/useClerkSync";
 const Home = lazy(() => import("./Pages/Home"));
 const Dashboard = lazy(() => import("./Pages/Dashboard"));
 const SearchResults = lazy(() => import("./Pages/SearchResults"));
-const Onboarding = lazy(() => import("./Pages/Onboarding"));
 const About = lazy(() => import("./Pages/About"));
 const Businesses = lazy(() => import("./Pages/Businesses"));
 const Create = lazy(() => import("./Pages/Create"));

@@ -1,4 +1,4 @@
-import React, { useState, useRef, ChangeEvent, DragEvent } from "react";
+import React, { useState, useRef, type ChangeEvent, type DragEvent } from "react";
 import { X, Upload, Loader2, Tag } from "lucide-react";
 import { api } from "../lib/api";
 import type { Pin } from "../types/pin";

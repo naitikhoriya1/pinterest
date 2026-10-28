@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import Masonry from "react-masonry-css";
 import type { Pin } from "../types/pin";
 
@@ -15,6 +15,8 @@ interface MasonryGrid1Props {
 }
 
 const MasonryGrid1: React.FC<MasonryGrid1Props> = ({ pins, onPinClick }) => {
+  const [failedPinIds, setFailedPinIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     console.log(`[MasonryGrid1] Rendering grid with ${pins.length} pins.`);
   }, [pins.length]);
@@ -39,25 +41,46 @@ const MasonryGrid1: React.FC<MasonryGrid1Props> = ({ pins, onPinClick }) => {
           }}
           className="group relative rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer bg-gray-100"
         >
-          {/* Pin image with width, height, loading="lazy", and w-full h-auto */}
-          <img
-            src={pin.imageUrl}
-            alt={pin.title}
-            width={pin.width}
-            height={pin.height}
-            loading="lazy"
-            onLoad={() => {
-              // optional debug if needed
-            }}
-            onError={() => {
-              console.error("[MasonryGrid1] ❌ Pin image failed to load:", {
-                pinId: pin._id,
-                title: pin.title,
-                failedUrl: pin.imageUrl,
-              });
-            }}
-            className="w-full h-auto object-cover rounded-2xl block"
-          />
+          {/* Neutral gray placeholder if image fails, or image with referrerPolicy="no-referrer" */}
+          {failedPinIds.has(pin._id) ? (
+            <div
+              style={{
+                aspectRatio:
+                  pin.width && pin.height ? `${pin.width} / ${pin.height}` : "2/3",
+              }}
+              className="w-full bg-gray-200 rounded-2xl flex flex-col items-center justify-center p-4 text-center text-gray-500"
+            >
+              <span className="text-xs font-semibold text-gray-600 line-clamp-3">
+                {pin.title}
+              </span>
+              <span className="text-[10px] text-gray-400 mt-1">Image unavailable</span>
+            </div>
+          ) : (
+            <img
+              src={pin.imageUrl}
+              alt={pin.title}
+              width={pin.width}
+              height={pin.height}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              onLoad={() => {
+                // optional debug if needed
+              }}
+              onError={() => {
+                console.error("[MasonryGrid1] ❌ Pin image failed to load:", {
+                  pinId: pin._id,
+                  title: pin.title,
+                  failedUrl: pin.imageUrl,
+                });
+                setFailedPinIds((prev) => {
+                  const next = new Set(prev);
+                  next.add(pin._id);
+                  return next;
+                });
+              }}
+              className="w-full h-auto object-cover rounded-2xl block"
+            />
+          )}
 
           {/* Hover overlay showing title and save count */}
           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-2xl flex flex-col justify-between p-3 pointer-events-none">

@@ -167,12 +167,14 @@ const CreatePinModal: React.FC<CreatePinModalProps> = ({
         console.log("[CreatePinModal] ✅ Pin created successfully via file upload:", res.data);
         createdPin = res.data;
       } else {
-        // Upload from remote image URL to Cloudinary
+        // Upload from remote image URL
         console.log("[CreatePinModal] Sending POST /api/pins with remote URL:", imageUrlInput.trim());
         const res = await api.post<{ success: boolean; data: Pin }>("/api/pins", {
           title: title.trim(),
           description: description.trim(),
           imageUrl: imageUrlInput.trim(),
+          width: 800,
+          height: 1200,
           tags,
         });
         console.log("[CreatePinModal] ✅ Pin created successfully via URL:", res.data);

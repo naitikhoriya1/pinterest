@@ -1,10 +1,9 @@
 import { Response } from "express";
+import { Types } from "mongoose";
 import { AuthRequest } from "../../middleware/auth.middleware";
 import Pin from "./pin.model";
 import User from "../auth/auth.model";
 import Notification from "../notification/notification.model";
-import cloudinary from "../../config/cloudinary";
-import { uploadToCloudinary } from "../../middleware/upload.middleware";
 import { parseCursor } from "../../utils/cursor";
 
 /**
@@ -50,7 +49,6 @@ export const getFeed = async (req: AuthRequest, res: Response): Promise<void> =>
     const pins = await Pin.find(query)
       .sort({ createdAt: -1, _id: -1 })
       .limit(limit + 1)
-      .populate("owner", "username email avatarUrl")
       .lean();
 
     const hasMore = pins.length > limit;
@@ -140,7 +138,6 @@ export const searchPins = async (req: AuthRequest, res: Response): Promise<void>
     const pins = await Pin.find(query)
       .sort({ createdAt: -1, _id: -1 })
       .limit(limit + 1)
-      .populate("owner", "username email avatarUrl")
       .lean();
 
     const hasMore = pins.length > limit;
@@ -190,9 +187,7 @@ export const getMyPins = async (req: AuthRequest, res: Response): Promise<void> 
 export const getPinById = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     console.log("[pin.controller:getPinById] Fetching pin ID:", req.params.id);
-    const pin = await Pin.findById(req.params.id)
-      .populate("owner", "username email avatarUrl")
-      .lean();
+    const pin = await Pin.findById(req.params.id).lean();
     if (!pin) {
       console.warn("[pin.controller:getPinById] ⚠️ Pin not found:", req.params.id);
       res.status(404).json({ success: false, message: "Pin not found" });
@@ -453,43 +448,70 @@ export const updatePin = async (req: AuthRequest, res: Response): Promise<void> 
 
 /**
  * DELETE /api/pins/:id
- * Deletes a pin and deletes its image asset from Cloudinary.
+ * Only the owner of a pin can delete it.
+ * Validates ObjectId, checks ownership, deletes from Pin, and cleans up notifications.
  */
 export const deletePin = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    console.log("[pin.controller:deletePin] Deleting pin ID:", req.params.id, "by user:", req.userId);
-    const pin = await Pin.findById(req.params.id);
+    const { id } = req.params;
+    const currentUserId = req.userId;
 
+    console.log("[pin.controller:deletePin] Delete request for pin ID:", id, "by user:", currentUserId);
+
+    // Validate :id format
+    if (!id || !Types.ObjectId.isValid(id) || !/^[0-9a-fA-F]{24}$/.test(id)) {
+      console.warn("[pin.controller:deletePin] ⚠️ Invalid pin id format:", id);
+      res.status(400).json({ success: false, message: "Invalid pin id" });
+      return;
+    }
+
+    // Load pin to check existence and ownership
+    const pin = await Pin.findById(id).select("owner");
     if (!pin) {
-      console.warn("[pin.controller:deletePin] ⚠️ Pin not found:", req.params.id);
+      console.warn("[pin.controller:deletePin] ⚠️ Pin not found:", id);
       res.status(404).json({ success: false, message: "Pin not found" });
       return;
     }
 
-    if (pin.owner.toString() !== req.userId?.toString()) {
-      console.warn("[pin.controller:deletePin] ⛔ Unauthorized delete attempt. Owner:", pin.owner, "Requester:", req.userId);
-      res.status(403).json({ success: false, message: "You are not authorized to delete this pin" });
+    // Compare like with like
+    if (pin.owner.toString() !== currentUserId?.toString()) {
+      console.warn(
+        "[pin.controller:deletePin] ⛔ Unauthorized delete attempt. Owner:",
+        pin.owner.toString(),
+        "Requester:",
+        currentUserId
+      );
+      res.status(403).json({
+        success: false,
+        message: "You can only delete your own pins",
+      });
       return;
     }
 
-    // Delete image from Cloudinary if public_id exists
-    if (pin.cloudinaryId) {
-      try {
-        console.log("[pin.controller:deletePin] Destroying Cloudinary asset:", pin.cloudinaryId);
-        await cloudinary.uploader.destroy(pin.cloudinaryId);
-        console.log("[pin.controller:deletePin] ✅ Cloudinary asset destroyed:", pin.cloudinaryId);
-      } catch (cloudErr: any) {
-        console.warn("[pin.controller:deletePin] ⚠️ Failed to delete Cloudinary asset:", cloudErr?.message || cloudErr);
-      }
+    // Delete enforcing ownership inside the delete query itself
+    const deleteResult = await Pin.deleteOne({ _id: id, owner: currentUserId });
+    if (deleteResult.deletedCount === 0) {
+      res.status(404).json({ success: false, message: "Pin not found" });
+      return;
     }
 
-    await pin.deleteOne();
-    console.log("[pin.controller:deletePin] ✅ Pin record deleted from MongoDB:", pin._id);
+    console.log("[pin.controller:deletePin] ✅ Pin record deleted from MongoDB:", id);
 
-    res.json({
+    // Clean up related notifications in its own isolated try/catch
+    try {
+      await Notification.deleteMany({ pin: id });
+      console.log("[pin.controller:deletePin] ✅ Cleaned up notifications for pin:", id);
+    } catch (notifErr: any) {
+      console.error(
+        "[pin.controller:deletePin] ⚠️ Failed to clean up notifications for pin:",
+        notifErr?.message || notifErr
+      );
+    }
+
+    res.status(200).json({
       success: true,
-      message: "Pin deleted successfully",
-      data: { _id: pin._id },
+      message: "Pin deleted",
+      id,
     });
   } catch (err: any) {
     console.error("[pin.controller:deletePin] ❌ Delete error:", err?.message || err);

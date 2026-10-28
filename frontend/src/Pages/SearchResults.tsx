@@ -3,6 +3,7 @@ import { useSearchParams, Navigate, Link } from "react-router-dom";
 import { ArrowLeft, Search } from "lucide-react";
 import { useClerkSync } from "../hooks/useClerkSync";
 import { useSearch } from "../hooks/useSearch";
+import { apiFetch } from "../lib/api";
 import MasonryGrid1 from "../Components/MasonryGrid1";
 import PinDetailModal from "../Components/PinDetailModal";
 import EditPinModal from "../Components/EditPinModal";
@@ -22,8 +23,8 @@ const SearchResults = () => {
     return <Navigate to="/dashboard" replace />;
   }
 
-  const { isSynced, apiUser } = useClerkSync();
-  const { pins, loading, error, hasMore, loadMore, retry } = useSearch(q, isSynced);
+  const { isSynced, apiUser, currentUserId } = useClerkSync();
+  const { pins, loading, error, hasMore, loadMore, retry, removePin } = useSearch(q, isSynced);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Modal states for pin viewing / editing
@@ -66,9 +67,34 @@ const SearchResults = () => {
   };
 
   const handlePinDeleted = (deletedPinId: string) => {
+    removePin(deletedPinId);
     setLocalPins((prev) => prev.filter((p) => p._id !== deletedPinId));
     if (selectedPin?._id === deletedPinId) {
       setSelectedPin(null);
+    }
+  };
+
+  const handleDeletePin = async (pinId: string) => {
+    try {
+      console.log("[SearchResults] Deleting pin:", pinId);
+      await apiFetch(`/api/pins/${pinId}`, { method: "DELETE" });
+      removePin(pinId);
+      setLocalPins((prev) => prev.filter((p) => p._id !== pinId));
+      if (selectedPin?._id === pinId) {
+        setSelectedPin(null);
+      }
+    } catch (err: any) {
+      if (err?.status === 404 || err?.message?.includes("404") || err?.message === "Pin not found") {
+        console.warn("[SearchResults] Pin was already deleted (404), removing locally:", pinId);
+        removePin(pinId);
+        setLocalPins((prev) => prev.filter((p) => p._id !== pinId));
+        if (selectedPin?._id === pinId) {
+          setSelectedPin(null);
+        }
+        return;
+      }
+      console.error("[SearchResults] Failed to delete pin:", err);
+      throw err;
     }
   };
 
@@ -149,6 +175,8 @@ const SearchResults = () => {
       <MasonryGrid1
         pins={localPins}
         onPinClick={(pin) => setSelectedPin(pin)}
+        currentUserId={currentUserId ?? apiUser?._id}
+        onDelete={handleDeletePin}
       />
 
       {/* Sentinel for infinite scroll */}

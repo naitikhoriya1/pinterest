@@ -7,7 +7,7 @@ export interface PinOwner {
 
 export interface Pin {
   _id: string;
-  owner?: string | PinOwner;
+  owner: string;
   title: string;
   description?: string;
   imageUrl: string;

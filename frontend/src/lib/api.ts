@@ -32,7 +32,7 @@ async function request<T>(
   );
 
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(options.body ? { "Content-Type": "application/json" } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers as Record<string, string>),
   };
@@ -55,6 +55,9 @@ async function request<T>(
   const duration = Math.round(performance.now() - startTime);
 
   if (!res.ok) {
+    if (res.status === 401) {
+      clearToken();
+    }
     const body = await res.json().catch(() => ({}));
     console.error(
       `%c[API Error ${res.status}]%c ${method} ${path} (${duration}ms)`,
@@ -67,10 +70,17 @@ async function request<T>(
         url,
       }
     );
-    throw new Error(body?.message ?? `API error ${res.status}`);
+    const error = new Error(body?.message ?? `API error ${res.status}`) as Error & {
+      status?: number;
+      responseBody?: any;
+    };
+    error.status = res.status;
+    error.responseBody = body;
+    throw error;
   }
 
-  const data = (await res.json()) as T;
+  const text = await res.text();
+  const data = (text ? JSON.parse(text) : {}) as T;
   console.log(
     `%c[API Success ${res.status}]%c ${method} ${path} (${duration}ms)`,
     "color: #10b981; font-weight: bold;",
